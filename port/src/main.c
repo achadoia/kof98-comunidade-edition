@@ -21,6 +21,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
+#ifdef KOF_SOLO
+#include "stb_image.h"
+#endif
 
 char cfg_arquivo[512] = "kof98.ini";
 static u32 tela[NEO_H][NEO_W];
@@ -338,6 +341,18 @@ int main(int argc, char **argv)
 	SDL_Window *win = SDL_CreateWindow("KOF98 Anniversary - port nativo (kof98-recomp)", SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED, NEO_H * escala * 4 / 3, NEO_H * escala, SDL_WINDOW_RESIZABLE | (autofoto ? SDL_WINDOW_HIDDEN : 0));
 	SDL_SetWindowSize(win, NEO_H * escala * 4 / 3, NEO_H * escala);
+#ifdef KOF_SOLO
+	{   // ícone da janela (arte/icone_64.png embutido)
+		extern const unsigned char embutido_icone_png[]; extern const size_t embutido_icone_png_tam;
+		int iw, ih, in;
+		unsigned char *ip = stbi_load_from_memory(embutido_icone_png, (int)embutido_icone_png_tam, &iw, &ih, &in, 4);
+		if (ip) {
+			SDL_Surface *is = SDL_CreateRGBSurfaceWithFormatFrom(ip, iw, ih, 32, iw * 4, SDL_PIXELFORMAT_RGBA32);
+			if (is) { SDL_SetWindowIcon(win, is); SDL_FreeSurface(is); }
+			stbi_image_free(ip);
+		}
+	}
+#endif
 	SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 	ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | (cfg.vsync ? SDL_RENDERER_PRESENTVSYNC : 0));
 	tex_jogo = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, NEO_W, NEO_H);

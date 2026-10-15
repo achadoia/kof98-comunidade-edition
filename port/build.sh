@@ -24,7 +24,8 @@ for f in src/main.c ${SOLO:+src/embutido.c} src/neo.c src/video.c src/rom.c src/
          $TP/z80/z80.c $TP/miniz/miniz.c; do compila cc "$f"; done
 for f in src/audio.cpp $TP/ymfm/src/ymfm_opn.cpp $TP/ymfm/src/ymfm_adpcm.cpp $TP/ymfm/src/ymfm_ssg.cpp; do compila c++ "$f"; done
 if [ -n "$SOLO" ]; then
-	$ZIG c++ $ALVO $OBJS $SDL/lib/libSDL2.a -lwinmm -limm32 -lole32 -loleaut32 -lversion -luuid -ladvapi32 -lsetupapi -lshell32 -lgdi32 -luser32 -lkernel32 -o bin/$SAIDA
+	$ZIG rc kof98.rc && mv -f kof98.res $OBJ/kof98.res   # ícone do EXE (arte/icone.ico); zig rc grava ao lado do .rc
+	$ZIG c++ $ALVO $OBJS $OBJ/kof98.res $SDL/lib/libSDL2.a -lwinmm -limm32 -lole32 -loleaut32 -lversion -luuid -ladvapi32 -lsetupapi -lshell32 -lgdi32 -luser32 -lkernel32 -o bin/$SAIDA
 else
 	$ZIG c++ $ALVO $OBJS $SDL/lib/libSDL2.dll.a -o bin/${SAIDA:-kof98.exe}
 	cp -u $SDL/bin/SDL2.dll bin/

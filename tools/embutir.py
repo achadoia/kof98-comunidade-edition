@@ -34,6 +34,7 @@ def bytes_c(dados, por_linha=24):
 def main():
     png = open(os.path.join(RAIZ, "port", "arte", "menu_fundo.png"), "rb").read()
     tiles = open(os.path.join(RAIZ, "port", "bin", "arte", "troca_tiles.bin"), "rb").read()
+    icone = open(os.path.join(RAIZ, "port", "arte", "icone_64.png"), "rb").read()
     patches = []
     dono = {}
     for nome in PATCHES:
@@ -53,6 +54,7 @@ def main():
         f.write("#include <stddef.h>\n")
         f.write(f"const unsigned char embutido_menu_png[] = {{\n{bytes_c(png)}\n}};\nconst size_t embutido_menu_png_tam = {len(png)};\n")
         f.write(f"const unsigned char embutido_tiles[] = {{\n{bytes_c(tiles)}\n}};\nconst size_t embutido_tiles_tam = {len(tiles)};\n")
+        f.write(f"const unsigned char embutido_icone_png[] = {{\n{bytes_c(icone)}\n}};\nconst size_t embutido_icone_png_tam = {len(icone)};\n")
         f.write(f"const unsigned char embutido_patches[] = {{\n{bytes_c(blob)}\n}};\nconst size_t embutido_patches_tam = {len(blob)};\n")
     print(f"embutido.c: menu {len(png)} B, retratos {len(tiles)} B, {len(patches)} patches ({len(blob)} B)")
 
