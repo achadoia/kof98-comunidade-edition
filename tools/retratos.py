@@ -50,8 +50,9 @@ def main():
     saida = bytearray()
     previas = []
     for r in spec["retratos"]:
-        img = Image.open(os.path.join(ARTE, r["imagem"])).convert("RGB")
+        img_padrao = Image.open(os.path.join(ARTE, r["imagem"])).convert("RGB")
         for alvo in r["alvos"]:
+            img = Image.open(os.path.join(ARTE, alvo["imagem"])).convert("RGB") if alvo.get("imagem") else img_padrao
             x0, y0, x1, y1 = alvo["area"]
             w, h = x1 - x0 + 1, y1 - y0 + 1
             peq, fundo = processa(img, alvo, w, h)

@@ -13,9 +13,9 @@ Lutadores com nome e retrato novos, na seleção, na tela de VS e ao lado da bar
 | No jogo | Era | Homenagem |
 |---|---|---|
 | **Terry Urameshi** | Terry Bogard | Roberto Urameshi |
-| **Orochi Daimon** | Goro Daimon | Helinho PE |
+| **Orochi Daimon** | Goro Daimon | Nane Orochimaru |
 | **Ralfecinha** | Ralf Jones | Kbecinha |
-| **Chizurinho** | Chizuru Kagura | — |
+| **Chizurinho** | Chizuru Kagura | Helinho PE |
 | **Lau Yagami** | Iori Yagami | Lau Yagami |
 | **Toma Saisyu** | Saisyu Kusanagi | Tomasu |
 

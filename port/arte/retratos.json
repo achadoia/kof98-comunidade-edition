@@ -672,40 +672,6 @@
      }
     },
     {
-     "onde": "prévia do P1 segurando Start (Orochi, virado pra esquerda)",
-     "recorte": [
-      330,
-      40,
-      1130,
-      840
-     ],
-     "area": [
-      19,
-      184,
-      44,
-      210
-     ],
-     "tiles": {
-      "8d933": [
-       16,
-       183
-      ],
-      "8d934": [
-       16,
-       199
-      ],
-      "8d935": [
-       32,
-       183
-      ],
-      "8d936": [
-       32,
-       199
-      ]
-     },
-     "espelhar": true
-    },
-    {
      "onde": "HUD na luta",
      "recorte": [
       300,
@@ -738,6 +704,75 @@
       ]
      },
      "sem_fundo": true
+    },
+    {
+     "onde": "prévia do P1 segurando Start (Orochi)",
+     "imagem": "retratos/lau_yagami_orochi_original.png",
+     "recorte": [
+      110,
+      60,
+      1140,
+      1120
+     ],
+     "area": [
+      19,
+      184,
+      44,
+      210
+     ],
+     "tiles": {
+      "8d933": [
+       16,
+       183
+      ],
+      "8d934": [
+       16,
+       199
+      ],
+      "8d935": [
+       32,
+       183
+      ],
+      "8d936": [
+       32,
+       199
+      ]
+     }
+    },
+    {
+     "onde": "HUD na luta (Orochi)",
+     "imagem": "retratos/lau_yagami_orochi_original.png",
+     "recorte": [
+      60,
+      0,
+      1190,
+      1080
+     ],
+     "sem_fundo": true,
+     "area": [
+      8,
+      10,
+      39,
+      37
+     ],
+     "tiles": {
+      "8d784": [
+       8,
+       8
+      ],
+      "8d785": [
+       8,
+       24
+      ],
+      "8d786": [
+       24,
+       8
+      ],
+      "8d787": [
+       24,
+       24
+      ]
+     }
     }
    ]
   }
