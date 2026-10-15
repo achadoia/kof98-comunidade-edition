@@ -1,0 +1,19 @@
+# nada derivado da ROM (copyright SNK) vai pro git
+*.zip
+*.bin
+*.p1
+*.sp2
+*.sta
+*.wav
+*.ogg
+*.mp3
+build/*
+!build/patches/
+port/bin/
+port/obj*/
+port/third_party/
+port/src/embutido.c
+dist/
+roms_ae*/
+som/
+__pycache__/

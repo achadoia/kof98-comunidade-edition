@@ -1,0 +1,111 @@
+# KOF98 Anniversary — port nativo pra PC
+
+EXE próprio (`bin/kof98.exe`) que roda o KOF98 Anniversary 2016 sem emulador externo. A ROM **não**
+vem dentro do EXE: ele lê os zips do usuário ao abrir (`roms/kof98aemod.zip` + `roms/neogeo.zip` ao lado
+do EXE, ou os do FBNeo/MAME desta máquina, ou zips passados na linha de comando).
+
+## Controles (padrão — tudo muda no F1)
+| | P1 | P2 |
+|---|---|---|
+| Direcional | setas | I J K L |
+| A B C D | Z X C V | Num4 Num5 Num1 Num2 |
+| A+B / C+D / A+B+C | A / S / D | Num7 / Num8 / Num9 |
+| Start / Moeda | 1 / 5 | 2 / 6 |
+
+Controle (qualquer um que o Windows veja: XInput, DirectInput, arcade stick): direcional e analógico,
+X=A, Y=B, A=C, B=D, LB=A+B, RB=C+D, Start, Back=moeda. Cima+baixo ou esquerda+direita juntos = neutro.
+
+## Teclas
+F1 configurações · F6 treino avançado · F4 troca o filtro · F11/Alt+Enter tela cheia · F5/F9 salva/carrega
+estado · F7/F8 grava/toca o boneco · F3 reset · F12 foto · Esc sai.
+
+### Configurações (F1)
+Salvas em `kof98.ini` ao lado do EXE. Abas (Tab, ou LB/RB no controle):
+- **Vídeo**: filtro (nítido, suave, linhas de TV, tubo CRT, fliperama — scanlines e grade RGB feitas na GPU
+  por textura em blend multiplicativo), proporção (4:3, pixel inteiro, tela toda), laterais borradas,
+  tela cheia, vsync, FPS.
+- **Controles**: por jogador; Enter numa ação grava a próxima tecla/botão/eixo/direcional (Del apaga);
+  "Configurar tudo" pede uma por uma; a ação acende em verde quando apertada (teste ao vivo);
+  até 3 ligações por ação (teclado + controle); restaurar padrão.
+- **Som**: volume, mudo.
+- **Melhorias**: pausar sem foco, início rápido (pula o logo), dica do F6.
+
+Abre em **modo console (AES)**: MODE SELECT do jogo de casa (Team Play, Team VS, Single, Survivor,
+Practice, Option). `--arcade` volta ao modo fliperama (MVS, com fichas).
+
+### Menu inicial "Ultimate Match - Comunidade Edition" (`src/frontend.c`)
+Arte 1672x941 em `arte/menu_fundo.png` (gerada no ChatGPT pelo usuário; o build converte pra `bin/arte/menu_fundo.bmp`).
+O jogo roda por trás: um piloto aperta Start no título (quadro 700 após o reset) e espera no MODE SELECT (pronto no 960;
+não volta sozinho pro título). Ao escolher, desce até o item e aperta A em avanço rápido (12 quadros por giro, som
+descartado) com "CARREGANDO..." e só então mostra o jogo. ARCADE PLAY = Single Play, TEAM PLAY = Team Play, 2P VS = Team VS,
+SURVIVAL = Survivor, PRACTICE = Practice, OPTIONS = Option do jogo, WATCH = abertura/demonstração, EXIT sai, COOP "em breve"
+(o KOF98 não tem). **Esc no jogo volta pro menu**; Esc no menu fecha. Sem a arte, abre direto no jogo.
+Teste (build KOF_TESTE): `KOF_MENU_ESCOLHA=<índice do item>` + `KOF_AUTOFOTO`; `KOF_RESET=1` no modo sem janela.
+
+### Retratos personalizados (`arte/retratos.json` -> `tools/retratos.py` -> `bin/arte/troca_tiles.bin`)
+O renderizador pinta tiles da ROM escolhidos (pelo código) com pixels ARGB próprios em vez da paleta (alfa 0 =
+pixel original). Terry Urameshi: grade da seleção (tiles 7B66-68/7B70-72, área 26x27 em x118-143 y14-40) e prévia
+do P1 (9F86-89 normal, F1EF-F2 segurando Start; x19-44 y184-210). Achar tiles: build de teste com
+`KOF_MAPA="quadro,arq.bin"` grava, por pixel, `código<<8 | linha<<4 | coluna` do tile que o pintou.
+Nome completo: `tools/renomear.py TERRY BOGARD URAMESHI` (campos fixos de 8 letras) -> patch `nome_terry_ae`.
+
+### Trilha trocável (`bin/som/musica/`)
+Arquivo `.ogg`/`.mp3`/`.wav` com o nome começando pelo código da música (`28.ogg`, `"32 Esaka.mp3"`) toca no
+lugar da música do chip; sem arquivo, toca a original. F1 → Som: liga/desliga, "Reler a pasta" e
+"Tocando: XX" (código atual). Repete o arquivo inteiro, ou o trecho LOOPSTART/LOOPLENGTH (amostras) do OGG.
+Vinhetas (24 2C 2E 2F 49 50 51 56) tocam uma vez. Implementação em `src/musica.c` (stb_vorbis, dr_mp3, dr_wav).
+- Códigos do driver de som (varredura 15/10): música 0x21-0x56 (0x4B = 0x21); 0x20 para a música; 01/03/04/0D
+  param tudo; 02 fade ~6 s; 0A xx fade curto; 05 0A 0E 15 16-1E levam 1 byte de parâmetro (16-1E = vozes), 14 leva 2.
+  Com arquivo, o código vira 0x20 pro Z80 e os efeitos continuam no chip.
+- Conhecidos: 21 abertura, 28 menu/como jogar, 23 seleção, 32 luta do Practice.
+- **Gravar a música do chip com loop perfeito não dá**: cada canal do driver tem loop próprio com duração um
+  pouco diferente (ex.: 7,146 s × 7,152 s na 0x28), então o som nunca se repete exato. Por isso a pasta vem
+  vazia e o chip continua sendo o padrão; arquivos são pra trilha oficial ou personalizada.
+- Teste (build KOF_TESTE): `KOF_SO_SOM="1:3,10:3,12:3,18:7,60:28"` roda só Z80+YM (sem 68k) mandando comandos
+  por quadro; `KOF_DEBUG_SOM=1` lista os comandos do jogo; `KOF_LOG_YM=arq` grava as escritas no YM2610.
+
+### Sons do KOF '98 Ultimate Match (`tools/importar_um.py`)
+Importa da instalação GOG do UM (`D:\The King of Fighters 98UM`, via vgmstream em `D:\Toolsgmstream`):
+- **Músicas**: `BGM_wavebank.xwb` faixas `07XX` = código `XX` do nosso driver (mesmo jogo). Vão pra
+  `som/musica/XX UM.ogg` com o loop do UM e volume 0,38 (UM é ~2,6x mais alto). Extras do UM em `som/musica_um_extras/`.
+- **Vozes/efeitos**: `WaveBank.xwb` nome `xxxx_PXX` = comando `1P XX` (P=0: efeito de 1 byte `XX`). Cada um é
+  conferido contra o som do chip (espectrograma, nota >= 0,8; 1305 de 1416 batem) e vai pra `som/efeitos/PXX.wav`
+  com o volume do chip. Os que não batem ficam no chip (códigos que o Anniversary mudou).
+- No EXE (`src/efeitos.c`): prefixo 16-1E fica retido até o parâmetro; com arquivo, toca aqui e nada vai pro Z80
+  (o 68k não espera resposta: tela/estado idênticos ao som 100% chip no quadro 2600). Fila de bytes pro Z80 entrega
+  um por vez. Um canal por prefixo + 7 em rodízio pros efeitos de 1 byte. F1 → Som liga/desliga cada pasta.
+- `KOF_SO_CHIP=1` força o som original (usado pela importação). Áudio do UM é da SNK: nunca vai pro git nem junto do EXE.
+
+### Treino avançado (F6)
+Menu do próprio EXE por cima do jogo (pausa enquanto aberto; ^v escolhe, <> muda, Z/Enter confirma):
+hitboxes (vermelho = ataque, azul = corpo), boneco P2 (em pé, agachado, defende em pé/agachado, pula),
+gravação do adversário (**F7** grava controlando o P2, **F8** toca/para, repetir em loop), histórico de
+comandos em notação numérica, vida/barra infinitas, velocidade da CPU, **F5** salva estado / **F9** carrega.
+Hitboxes: 4 caixas por lutador em `+0x90` (tipo, x, y, meia-largura, meia-altura), ativas por `+0x7C`
+bits 0-3; caixa 0 = ataque; posição na tela em `+0x24`/`+0x26`.
+
+## Opções
+- CPU do 68000 **fixa em 200%** (sem a lentidão do Neo Geo; não há como reduzir)
+- teste sem janela: `--sem-janela --quadros N --foto x.bmp --wav som.wav --seg-entradas "700-705:co=1,760-765:st=1,900-904:p1=10"`
+  (alvos p1/p2/st/co, bits ativos em hexa; mesmo formato do `lua/roteiro_boot.lua` no MAME → comparação quadro a quadro)
+
+## Arquitetura (`src/`)
+- `rom.c` — acha os arquivos nos zips pela extensão (.p1/.sp2/.s1/.m1/.vN/.cN + BIOS sp-s2/sfix/sm1/000-lo).
+- `neo.c` — mapa de memória do 68000, E/S, trava do sistema (HC259), RAM de backup, RTC mínimo,
+  **watchdog** (o jogo depende do reset dele na inicialização) e agendador de 264 linhas/quadro.
+- `video.c` — LSPC: VRAM com auto-incremento, sprites (381, zoom, cadeias, animação automática),
+  camada fixa, paleta (rede de resistores), timer de raster (IRQ2).
+- `audio.cpp` — Z80 + YM2610 (ymfm), latches de comando/resposta, NMI, bancos da M1.
+- `main.c` — SDL2: janela, som, teclado/controle, 59,19 Hz.
+
+Bibliotecas (MIT/BSD, `./baixar_deps.sh`): Musashi (68000), superzazu/z80, ymfm (YM2610), miniz.
+Referência de hardware: driver Neo Geo do MAME (BSD-3) em `../ref/mame/`.
+
+## Fases
+1. **Runtime próprio** (feito 15/10): o jogo inteiro roda no EXE, gráficos idênticos ao MAME,
+   som, 130+ quadros/s com a CPU a 200%. A CPU 68000 ainda é interpretada (Musashi).
+2. **Recompilação 68000 → C**: o código do jogo vira C nativo compilado; o Musashi fica só de reserva
+   pra endereços não traduzidos.
+3. Extras: Pix na live, mudanças direto no código, widescreen etc.
+
+Build: `./build.sh` (Zig 0.13 em D:\Tools\zig + SDL2 2.30.9 mingw em D:\Tools).

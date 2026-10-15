@@ -1,0 +1,745 @@
+{
+ "_leia": "Retratos trocados no EXE (tools/retratos.py -> bin/arte/troca_tiles.bin). 'tiles' = código do tile na ROM -> origem (x, y) na tela da captura (tools/medir_retrato.py); 'area' = parte que recebe a imagem (x0, y0, x1, y1 inclusive); 'recorte' = pedaço da imagem original usado. Seleção: grade e prévia do P1 (Start = versão EX, só o Terry tem tiles próprios). HUD = rosto ao lado da barra de vida (o P2 usa os mesmos tiles espelhados). Medido em 15/10.",
+ "retratos": [
+  {
+   "nome": "Terry Urameshi",
+   "imagem": "retratos/terry_urameshi_original.png",
+   "alvos": [
+    {
+     "onde": "grade da seleção",
+     "recorte": [
+      760,
+      180,
+      1340,
+      782
+     ],
+     "area": [
+      118,
+      14,
+      143,
+      40
+     ],
+     "tiles": {
+      "7b66": [
+       112,
+       0
+      ],
+      "7b67": [
+       112,
+       16
+      ],
+      "7b68": [
+       112,
+       32
+      ],
+      "7b70": [
+       128,
+       0
+      ],
+      "7b71": [
+       128,
+       16
+      ],
+      "7b72": [
+       128,
+       32
+      ]
+     }
+    },
+    {
+     "onde": "prévia do P1",
+     "recorte": [
+      760,
+      180,
+      1340,
+      782
+     ],
+     "area": [
+      19,
+      184,
+      44,
+      210
+     ],
+     "tiles": {
+      "9f86": [
+       16,
+       183
+      ],
+      "9f87": [
+       16,
+       199
+      ],
+      "9f88": [
+       32,
+       183
+      ],
+      "9f89": [
+       32,
+       199
+      ]
+     }
+    },
+    {
+     "onde": "prévia do P1 segurando Start (virado pra esquerda)",
+     "recorte": [
+      760,
+      180,
+      1340,
+      782
+     ],
+     "espelhar": true,
+     "area": [
+      19,
+      184,
+      44,
+      210
+     ],
+     "tiles": {
+      "f1ef": [
+       16,
+       183
+      ],
+      "f1f0": [
+       16,
+       199
+      ],
+      "f1f1": [
+       32,
+       183
+      ],
+      "f1f2": [
+       32,
+       199
+      ]
+     }
+    },
+    {
+     "onde": "HUD na luta",
+     "recorte": [
+      735,
+      175,
+      1345,
+      710
+     ],
+     "sem_fundo": true,
+     "area": [
+      8,
+      10,
+      39,
+      37
+     ],
+     "tiles": {
+      "a53d": [
+       8,
+       8
+      ],
+      "a53e": [
+       8,
+       24
+      ],
+      "a53f": [
+       24,
+       8
+      ],
+      "a540": [
+       24,
+       24
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "nome": "Orochi Daimon",
+   "imagem": "retratos/orochi_daimon_original.png",
+   "alvos": [
+    {
+     "onde": "grade da seleção",
+     "recorte": [
+      430,
+      80,
+      1190,
+      870
+     ],
+     "area": [
+      77,
+      15,
+      102,
+      41
+     ],
+     "tiles": {
+      "7b48": [
+       64,
+       0
+      ],
+      "7b49": [
+       64,
+       16
+      ],
+      "7b4a": [
+       64,
+       32
+      ],
+      "7b52": [
+       80,
+       0
+      ],
+      "7b53": [
+       80,
+       16
+      ],
+      "7b54": [
+       80,
+       32
+      ],
+      "7b5c": [
+       96,
+       0
+      ],
+      "7b5d": [
+       96,
+       16
+      ],
+      "7b5e": [
+       96,
+       32
+      ]
+     }
+    },
+    {
+     "onde": "prévia do P1",
+     "recorte": [
+      430,
+      80,
+      1190,
+      870
+     ],
+     "area": [
+      19,
+      184,
+      44,
+      210
+     ],
+     "tiles": {
+      "9f82": [
+       16,
+       183
+      ],
+      "9f83": [
+       16,
+       199
+      ],
+      "9f84": [
+       32,
+       183
+      ],
+      "9f85": [
+       32,
+       199
+      ]
+     }
+    },
+    {
+     "onde": "HUD na luta",
+     "recorte": [
+      420,
+      85,
+      1200,
+      770
+     ],
+     "sem_fundo": true,
+     "area": [
+      8,
+      10,
+      39,
+      37
+     ],
+     "tiles": {
+      "a539": [
+       8,
+       8
+      ],
+      "a53a": [
+       8,
+       24
+      ],
+      "a53b": [
+       24,
+       8
+      ],
+      "a53c": [
+       24,
+       24
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "nome": "Toma Saisyu",
+   "imagem": "retratos/toma_saisyu_original.png",
+   "alvos": [
+    {
+     "onde": "grade da seleção",
+     "recorte": [
+      330,
+      130,
+      1060,
+      888
+     ],
+     "area": [
+      177,
+      117,
+      202,
+      143
+     ],
+     "tiles": {
+      "7b8f": [
+       176,
+       112
+      ],
+      "7b90": [
+       176,
+       128
+      ],
+      "7b9b": [
+       192,
+       112
+      ],
+      "7b9c": [
+       192,
+       128
+      ]
+     }
+    },
+    {
+     "onde": "prévia do P1",
+     "recorte": [
+      330,
+      130,
+      1060,
+      888
+     ],
+     "area": [
+      19,
+      184,
+      44,
+      210
+     ],
+     "tiles": {
+      "9ffa": [
+       16,
+       183
+      ],
+      "9ffb": [
+       16,
+       199
+      ],
+      "9ffc": [
+       32,
+       183
+      ],
+      "9ffd": [
+       32,
+       199
+      ]
+     }
+    },
+    {
+     "onde": "HUD na luta",
+     "recorte": [
+      340,
+      130,
+      1060,
+      762
+     ],
+     "sem_fundo": true,
+     "area": [
+      8,
+      10,
+      39,
+      37
+     ],
+     "tiles": {
+      "a5c3": [
+       8,
+       8
+      ],
+      "a5c4": [
+       8,
+       24
+      ],
+      "a5c5": [
+       24,
+       8
+      ],
+      "a5c6": [
+       24,
+       24
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "nome": "Ralfecinha",
+   "imagem": "retratos/ralfecinha_original.png",
+   "alvos": [
+    {
+     "onde": "grade da seleção",
+     "recorte": [
+      330,
+      60,
+      1130,
+      860
+     ],
+     "area": [
+      48,
+      50,
+      73,
+      76
+     ],
+     "tiles": {
+      "7aef": [
+       48,
+       48
+      ],
+      "7af0": [
+       48,
+       64
+      ],
+      "7af7": [
+       64,
+       48
+      ],
+      "7af8": [
+       64,
+       64
+      ]
+     }
+    },
+    {
+     "onde": "prévia do P1",
+     "recorte": [
+      330,
+      60,
+      1130,
+      860
+     ],
+     "area": [
+      19,
+      184,
+      44,
+      210
+     ],
+     "tiles": {
+      "9fa2": [
+       16,
+       183
+      ],
+      "9fa3": [
+       16,
+       199
+      ],
+      "9fa4": [
+       32,
+       183
+      ],
+      "9fa5": [
+       32,
+       199
+      ]
+     }
+    },
+    {
+     "onde": "HUD na luta",
+     "recorte": [
+      300,
+      60,
+      1200,
+      850
+     ],
+     "area": [
+      8,
+      10,
+      39,
+      37
+     ],
+     "tiles": {
+      "a560": [
+       8,
+       8
+      ],
+      "a561": [
+       8,
+       24
+      ],
+      "a562": [
+       24,
+       8
+      ],
+      "a563": [
+       24,
+       24
+      ]
+     },
+     "sem_fundo": true
+    }
+   ]
+  },
+  {
+   "nome": "Chizurinho",
+   "imagem": "retratos/chizurinho_original.png",
+   "alvos": [
+    {
+     "onde": "grade da seleção",
+     "recorte": [
+      330,
+      70,
+      1130,
+      870
+     ],
+     "area": [
+      217,
+      49,
+      242,
+      75
+     ],
+     "tiles": {
+      "7ba1": [
+       208,
+       48
+      ],
+      "7ba2": [
+       208,
+       64
+      ],
+      "7bab": [
+       224,
+       48
+      ],
+      "7bac": [
+       224,
+       64
+      ],
+      "7bb5": [
+       240,
+       48
+      ],
+      "7bb6": [
+       240,
+       64
+      ]
+     }
+    },
+    {
+     "onde": "prévia do P1",
+     "recorte": [
+      330,
+      70,
+      1130,
+      870
+     ],
+     "area": [
+      19,
+      184,
+      44,
+      210
+     ],
+     "tiles": {
+      "9fb6": [
+       16,
+       183
+      ],
+      "9fb7": [
+       16,
+       199
+      ],
+      "9fb8": [
+       32,
+       183
+      ],
+      "9fb9": [
+       32,
+       199
+      ]
+     }
+    },
+    {
+     "onde": "HUD na luta",
+     "recorte": [
+      300,
+      70,
+      1200,
+      860
+     ],
+     "area": [
+      8,
+      10,
+      39,
+      37
+     ],
+     "tiles": {
+      "a576": [
+       8,
+       8
+      ],
+      "a577": [
+       8,
+       24
+      ],
+      "a578": [
+       24,
+       8
+      ],
+      "a579": [
+       24,
+       24
+      ]
+     },
+     "sem_fundo": true
+    }
+   ]
+  },
+  {
+   "nome": "Lau Yagami",
+   "imagem": "retratos/lau_yagami_original.png",
+   "alvos": [
+    {
+     "onde": "grade da seleção",
+     "recorte": [
+      330,
+      40,
+      1130,
+      840
+     ],
+     "area": [
+      19,
+      115,
+      44,
+      141
+     ],
+     "tiles": {
+      "7b3e": [
+       16,
+       112
+      ],
+      "7b3f": [
+       16,
+       128
+      ],
+      "7b46": [
+       32,
+       112
+      ],
+      "7b47": [
+       32,
+       128
+      ]
+     }
+    },
+    {
+     "onde": "prévia do P1",
+     "recorte": [
+      330,
+      40,
+      1130,
+      840
+     ],
+     "area": [
+      19,
+      184,
+      44,
+      210
+     ],
+     "tiles": {
+      "9fe6": [
+       16,
+       183
+      ],
+      "9fe7": [
+       16,
+       199
+      ],
+      "9fe8": [
+       32,
+       183
+      ],
+      "9fe9": [
+       32,
+       199
+      ]
+     }
+    },
+    {
+     "onde": "prévia do P1 segurando Start (Orochi, virado pra esquerda)",
+     "recorte": [
+      330,
+      40,
+      1130,
+      840
+     ],
+     "area": [
+      19,
+      184,
+      44,
+      210
+     ],
+     "tiles": {
+      "8d933": [
+       16,
+       183
+      ],
+      "8d934": [
+       16,
+       199
+      ],
+      "8d935": [
+       32,
+       183
+      ],
+      "8d936": [
+       32,
+       199
+      ]
+     },
+     "espelhar": true
+    },
+    {
+     "onde": "HUD na luta",
+     "recorte": [
+      300,
+      40,
+      1200,
+      830
+     ],
+     "area": [
+      8,
+      10,
+      39,
+      37
+     ],
+     "tiles": {
+      "a5ae": [
+       8,
+       8
+      ],
+      "a5af": [
+       8,
+       24
+      ],
+      "a5b0": [
+       24,
+       8
+      ],
+      "a5b1": [
+       24,
+       24
+      ]
+     },
+     "sem_fundo": true
+    }
+   ]
+  }
+ ]
+}

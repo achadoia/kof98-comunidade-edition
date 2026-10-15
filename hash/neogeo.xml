@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!DOCTYPE softwarelist SYSTEM "softwarelist.dtd">
+<softwarelist name="neogeo" description="KOF98 Anniversary (lista local; v5 fora: MAME limita ADPCM-A a 16MB)">
+	<software name="kof98ae2016">
+		<description>The King of Fighters '98 Anniversary Edition 2016 (hack EGCG)</description>
+		<year>2016</year>
+		<publisher>hack</publisher>
+		<part name="cart" interface="neo_cart">
+			<dataarea name="maincpu" width="16" endianness="big" size="0x700000">
+				<rom loadflag="load16_word_swap" name="242ae-p1.p1" offset="0x0" size="0x100000" crc="d69ecaa9" sha1="924741bfab19a43d14704aeb305970de616788e4" />
+				<rom loadflag="load16_word_swap" name="242ae-p2.sp2" offset="0x100000" size="0x600000" crc="ac1e9e79" sha1="95caf44bb771a7ce5663f60127cf5ae798f7dd4c" />
+			</dataarea>
+			<dataarea name="fixed" size="0x040000">
+				<rom name="242ae-s1.s1" offset="0x0" size="0x40000" crc="345c20b0" sha1="ff844e47667297f09f8b49ae19987542e253095e" />
+			</dataarea>
+			<dataarea name="audiocpu" size="0x040000">
+				<rom name="242ae-m1.m1" offset="0x0" size="0x40000" crc="9ade0528" sha1="67d0c3b146d369416b84c081544fe51fc6c2a140" />
+			</dataarea>
+			<dataarea name="ymsnd:adpcma" size="0x1000000">
+				<rom name="242-v1.v1" offset="0x0" size="0x400000" crc="b9ea8051" sha1="49606f64eb249263b3341b4f50cc1763c390b2af" />
+				<rom name="242-v2.v2" offset="0x400000" size="0x400000" crc="cc11106e" sha1="d3108bc05c9bf041d4236b2fa0c66b013aa8db1b" />
+				<rom name="242-v3.v3" offset="0x800000" size="0x400000" crc="044ea4e1" sha1="062a2f2e52098d73bc31c9ad66f5db8080395ce8" />
+				<rom name="242-v4.v4" offset="0xc00000" size="0x400000" crc="7985ea30" sha1="54ed5f0324de6164ea81943ebccb3e8d298368ec" />
+			</dataarea>
+			<dataarea name="sprites" size="0x6000000">
+				<rom loadflag="load16_byte" name="242ae-c1.c1" offset="0x0" size="0x800000" crc="086ec060" sha1="dace47c251e5c9bea771e221bf550e1b4af5212d" />
+				<rom loadflag="load16_byte" name="242ae-c2.c2" offset="0x1" size="0x800000" crc="16b9a9a2" sha1="c8b757e6a84bae33caab07de27ca6c3d84d1893a" />
+				<rom loadflag="load16_byte" name="242-c3.c3" offset="0x1000000" size="0x800000" crc="22127b4f" sha1="bd0d00f889d9da7c6ac48f287d9ed8c605ae22cf" />
+				<rom loadflag="load16_byte" name="242-c4.c4" offset="0x1000001" size="0x800000" crc="0b4fa044" sha1="fa13c3764fae6b035a626601bc43629f1ebaaffd" />
+				<rom loadflag="load16_byte" name="242ae-c5.c5" offset="0x2000000" size="0x800000" crc="71641718" sha1="b88a00aca2fc34230d2d2da0b235195a5eb1ecf0" />
+				<rom loadflag="load16_byte" name="242ae-c6.c6" offset="0x2000001" size="0x800000" crc="982ba2b3" sha1="232ce3be7beaad13b35865da770157ef4b29a7a9" />
+				<rom loadflag="load16_byte" name="242ae-c7.c7" offset="0x3000000" size="0x800000" crc="8d495552" sha1="20ff76b681b2e544c5a57060bb98ab6bb91bea3c" />
+				<rom loadflag="load16_byte" name="242ae-c8.c8" offset="0x3000001" size="0x800000" crc="8bfc3417" sha1="38bb85563d0a7f008a64cf76d71d82b935cd98e5" />
+				<rom loadflag="load16_byte" name="242ae-c9.c9" offset="0x4000000" size="0x800000" crc="128256d1" sha1="948af62545756165890e950fcd67bbd6304b3366" />
+				<rom loadflag="load16_byte" name="242ae-c10.c10" offset="0x4000001" size="0x800000" crc="4bd8412d" sha1="72e9cc6e3df8000d0a7fc7a89257dd0ce56fc909" />
+				<rom loadflag="load16_byte" name="242ae-c11.c11" offset="0x5000000" size="0x800000" crc="56d361cb" sha1="594826cf58b7cd3b0bee05cdab1265d03c057b58" />
+				<rom loadflag="load16_byte" name="242ae-c12.c12" offset="0x5000001" size="0x800000" crc="f8cb115b" sha1="ba8a152a59acfcf72c73c6e29cd6e133630e100d" />
+			</dataarea>
+		</part>
+	</software>
+</softwarelist>
