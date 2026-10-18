@@ -16,7 +16,12 @@ const char *musica_arquivo(int cod);
 void musica_reset(void);
 void musica_estado(Estado *e);
 void musica_fila_estado(Estado *e);      // só prefixo/fila pro Z80 (run-ahead)
-extern int musica_silenciosa;            // 1 = quadro de run-ahead: nada toca por arquivo, o Z80 recebe o mesmo
+extern int musica_silenciosa;
+// Menu Comunidade Edition: a música que estiver tocando (tema de abertura) segue até o jogador escolher um modo,
+// a 50%; "pare tudo"/trocas de música do jogo ficam pendentes e valem quando o menu entrega o jogo.
+extern int musica_modo_menu;
+void musica_menu_fim(int aplicar_pendente);   // 0 = descarta (reset do jogo vem em seguida)
+extern int musica_silenciosa_dummy_;            // 1 = quadro de run-ahead: nada toca por arquivo, o Z80 recebe o mesmo
 #ifdef __cplusplus
 }
 #endif

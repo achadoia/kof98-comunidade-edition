@@ -305,6 +305,9 @@ int main(int argc, char **argv)
 		}
 		if (getenv("KOF_CFG")) menu_cfg_abre(atoi(getenv("KOF_CFG")) - 1);
 #ifdef KOF_TESTE
+		if (getenv("KOF_MENU_MUSICA")) musica_modo_menu = 1;
+#endif
+#ifdef KOF_TESTE
 		{ void frontend_teste_arte(void); if (getenv("KOF_VIGIA_TESTE")) frontend_teste_arte(); }
 #endif
 		FILE *fw = wav ? fopen(wav, "wb") : NULL;
@@ -325,6 +328,9 @@ int main(int argc, char **argv)
 		for (u32 q = 0; !so_som && q < quadros_max; q++) {
 			neo_in_p1 = neo_in_p2 = 0xff; neo_in_start = 0x0f; neo_in_coin = 0x07; neo_in_test = 1;
 			aplica_roteiro();
+#ifdef KOF_TESTE
+			if (getenv("KOF_MENU_MUSICA") && neo_quadros == (u32)atoi(getenv("KOF_MENU_MUSICA"))) musica_menu_fim(1);
+#endif
 			treino_entradas();
 			ordem_entradas();
 			config_aplica_cenario();
@@ -473,7 +479,8 @@ int main(int argc, char **argv)
 #ifdef KOF_TESTE
 			if (getenv("KOF_DEBUG_ENTRADA") && e.type == SDL_KEYDOWN) fprintf(stderr, "tecla %d quadro %u\n", e.key.keysym.scancode, neo_quadros);
 #endif
-			if (frontend_ativo) {          // no menu inicial só vale Esc (sai), F11/Alt+Enter e F12
+			if (frontend_ativo) {          // no menu inicial vale F1 (configurações por cima), Esc (sai), F11/Alt+Enter e F12
+				if (menu_cfg_evento(&e)) continue;
 				if (e.type == SDL_KEYDOWN && !e.key.repeat) {
 					SDL_Scancode s = e.key.keysym.scancode;
 					if (s == SDL_SCANCODE_ESCAPE) rodando = 0;
@@ -512,7 +519,7 @@ int main(int argc, char **argv)
 
 		entrada_le();
 		int pausado = !frontend_ativo && (cfgmenu_aberto || treino_aberto || (sem_foco && cfg.pausa_sem_foco));
-		if (frontend_ativo) frontend_controles(&rodando);
+		if (frontend_ativo && !cfgmenu_aberto) frontend_controles(&rodando);
 		int passos = pausado ? 0 : frontend_passos();   // >1 = avanço rápido escondido atrás do menu
 		int rapido = passos > 1;
 		if (!rapido && !pausado && ritmo_monitor_ativo && dev) {   // vsync dita o ritmo; a fila de som só corrige a deriva
@@ -526,6 +533,7 @@ int main(int argc, char **argv)
 		for (int passo_i = 0; passo_i < passos; passo_i++) {
 			int piloto = frontend_piloto();
 			if (!piloto) config_aplica_entradas();
+			if (!piloto && nroteiro) aplica_roteiro();
 #ifdef KOF_TESTE
 			if (getenv("KOF_DEBUG_ENTRADA") && neo_in_start != 0x0f) fprintf(stderr, "start %x quadro %u\n", neo_in_start, neo_quadros);
 #endif
@@ -564,7 +572,11 @@ int main(int argc, char **argv)
 				SDL_QueueAudio(dev, amostras, (Uint32)n * 4);
 			}
 		}
-		if (frontend_ativo) frontend_desenha(ren);
+		if (frontend_ativo && cfgmenu_aberto) {
+			for (int y = 0; y < NEO_H; y++) for (int x = 0; x < NEO_W; x++) tela[y][x] = 0xff05070cu;
+			menu_cfg_desenha(tela);
+			apresenta();
+		} else if (frontend_ativo) frontend_desenha(ren);
 		else {
 		memcpy(tela, neo_fb, sizeof tela);
 		ordem_desenha(tela);

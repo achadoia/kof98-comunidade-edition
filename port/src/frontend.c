@@ -7,6 +7,7 @@
 // 5 Practice, 6 Option. Tempos do piloto = bin/roteiro_pratica.txt (Start no quadro 700, menu pronto no 960).
 #include "frontend.h"
 #include "config.h"
+#include "musica.h"
 extern char font8x8_basic[128][8];   // definida em ui.c (font8x8_basic.h)
 #include <stdio.h>
 #include <string.h>
@@ -160,6 +161,7 @@ static void compoe(void)
 void frontend_abre(void)
 {
 	if (!fundo) return;
+	musica_modo_menu = 1;        // o tema de abertura segue (a 50%) até o jogador escolher
 	neo_reset();
 	frontend_ativo = 1;
 	piloto = 1;
@@ -173,7 +175,7 @@ static void escolhe(int *rodando)
 	const Item *it = &ITENS[sel];
 	if (it->modo == -3) return;
 	if (it->modo == -2) { *rodando = 0; return; }
-	if (it->modo == -1) { neo_reset(); piloto = 3; frontend_ativo = 0; return; }
+	if (it->modo == -1) { musica_menu_fim(0); neo_reset(); piloto = 3; frontend_ativo = 0; return; }
 	alvo = it->modo;
 	cursor_ini = (int)m68k_read_memory_8(RAM_CURSOR);
 	if (cursor_ini < 0 || cursor_ini > 6 || m68k_read_memory_8(RAM_TELA) != 1) cursor_ini = 0;
@@ -229,6 +231,7 @@ void frontend_vigia(void)
 	if (!ms) { vigia_n = 0; return; }
 	if (++vigia_n < 6) return;
 	vigia_n = 0;
+	musica_modo_menu = 1;
 	frontend_ativo = 1;
 	piloto = 1;
 	q_rel = Q_MENU;              // já está no MODE SELECT: nada de Start
@@ -256,15 +259,15 @@ int frontend_piloto(void)
 		for (int i = 0; i < toques; i++) if (r >= (u32)(i * PASSO) && r < (u32)(i * PASSO + 4)) neo_in_p1 &= (u8)~bit;
 		u32 qa = (u32)(toques * PASSO + 8);
 		if (r >= qa && r < qa + 5) neo_in_p1 &= (u8)~0x10;                                                           // A
-		if (alvo == 6) { if (r >= qa + 30) { piloto = 0; frontend_ativo = 0; } }
+		if (alvo == 6) { if (r >= qa + 30) { piloto = 0; frontend_ativo = 0; musica_menu_fim(1); } }
 		else if (r >= qa + 30) {
 			int tela = m68k_read_memory_8(RAM_TELA);
 #ifdef KOF_TESTE
 			if (getenv("KOF_DEBUG_PILOTO") && r % 30 == 0) fprintf(stderr, "piloto q=%u r=%u tela=%d q_fim=%u cursor=%02x option=%02x fase=%02x alvo=%d toques=%d\n", q, r, tela, q_fim, m68k_read_memory_8(RAM_CURSOR), m68k_read_memory_8(RAM_OPTION), m68k_read_memory_8(RAM_FASE), alvo, toques);
 #endif
 			if (tela == 1) { if ((r - qa) % 24 < 4) neo_in_p1 &= (u8)~0x10; }   // CONTROLS e afins: pula com A
-			else if (tela == 2) { if (!q_fim) q_fim = r; if (r >= q_fim + 40) { piloto = 0; frontend_ativo = 0; } }
-			if (r > qa + 1200) { piloto = 0; frontend_ativo = 0; }            // segurança: nunca prende o jogador
+			else if (tela == 2) { if (!q_fim) q_fim = r; if (r >= q_fim + 40) { piloto = 0; frontend_ativo = 0; musica_menu_fim(1); } }
+			if (r > qa + 1200) { piloto = 0; frontend_ativo = 0; musica_menu_fim(1); }            // segurança: nunca prende o jogador
 		}
 	}
 	return 1;

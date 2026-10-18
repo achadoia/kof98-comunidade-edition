@@ -44,6 +44,9 @@ static Faixa F = {.cod = -1};
 
 int musica_ligada = 1;
 int musica_silenciosa;
+int musica_modo_menu;
+int musica_silenciosa_dummy_;
+static int pendente_menu = -1;   // última música/parada que o jogo pediu com o menu aberto (-1 nada, 0x20 parar)
 int musica_ultima_cod = -1;           // última música pedida pelo jogo (pra mostrar no F1)
 static int param_resta;              // bytes de parâmetro que ainda vêm (não são comandos)
 
@@ -93,6 +96,9 @@ void musica_init(const char *base)
 
 static void fecha(void)
 {
+#ifdef KOF_TESTE
+	if (F.cod >= 0 && getenv("KOF_DEBUG_SOM")) fprintf(stderr, "musica fecha %02x pos=%llu total=%llu loop=%llu-%llu quadro=%u\n", F.cod, (unsigned long long)F.pos, (unsigned long long)F.total, (unsigned long long)F.loop_ini, (unsigned long long)F.loop_fim, neo_quadros);
+#endif
 	if (F.tipo == 1 && F.ogg) stb_vorbis_close(F.ogg);
 	if (F.tipo == 2) drmp3_uninit(&F.mp3);
 	if (F.tipo == 3) drwav_uninit(&F.wav);
@@ -184,7 +190,7 @@ void musica_mistura(s16 *buf, int n)
 		}
 		for (int c = 0; c < 2; c++) {
 			double v = F.atual[c] + (F.prox[c] - F.atual[c]) * F.frac;
-			int s = buf[i * 2 + c] + (int)(v * F.ganho);
+			int s = buf[i * 2 + c] + (int)(v * F.ganho * (musica_modo_menu ? 0.5f : 1.0f));
 			buf[i * 2 + c] = (s16)(s > 32767 ? 32767 : s < -32768 ? -32768 : s);
 		}
 		F.frac += passo;
@@ -229,6 +235,11 @@ void musica_comando(u8 cmd)
 		return;
 	}
 	if (param_resta) { param_resta--; poe(cmd); return; }
+	if (musica_modo_menu && !musica_silenciosa && (musica_ultima_cod >= 0 || F.cod >= 0)) {   // já tem música: nada a derruba
+		if (cmd == 0x20 || cmd == 0x02 || cmd == 0x01 || cmd == 0x03 || cmd == 0x04 || cmd == 0x0d) { pendente_menu = 0x20; if (cmd != 0x20 && cmd != 0x02) efeitos_para_tudo(); return; }
+		if (cmd == 0x0a) { param_resta = 1; pendente_menu = 0x20; return; }
+		if (cmd >= 0x21 && cmd <= 0x56) { pendente_menu = cmd; return; }
+	}
 	switch (cmd) {
 	case 0x16: case 0x17: case 0x18: case 0x19: case 0x1a: case 0x1b: case 0x1c: case 0x1d: case 0x1e:
 		prefixo = cmd; return;
@@ -262,8 +273,19 @@ void musica_comando(u8 cmd)
 int musica_tocando(void) { return F.cod; }
 const char *musica_arquivo(int cod) { return cod >= 0 && cod < 256 ? arquivo[cod] : NULL; }
 
+void musica_menu_fim(int aplicar)
+{
+	musica_modo_menu = 0;
+	int p = pendente_menu;
+	pendente_menu = -1;
+	if (!aplicar || p < 0) return;
+	if (p == 0x20) { fecha(); musica_ultima_cod = -1; poe(0x20); return; }
+	musica_comando((u8)p);
+}
+
 void musica_reset(void)
 {
+	pendente_menu = -1;
 	fecha();
 	efeitos_para_tudo();
 	param_resta = 0; prefixo = -1; para_n = 0; fila_n = fila_ini = 0;
