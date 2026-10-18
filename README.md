@@ -61,6 +61,7 @@ Quer entrar no jogo também, ou tem ideia de personagem, golpe ou modo? Chama no
 - **Sprites sem limite**: nada some em cena cheia (o hardware cortava em 96 por linha).
 - Menu Comunidade Edition com som e **no lugar do MODE SELECT original sempre** (Start no título, saída do OPTION, fim de jogo).
 - **Nenhuma tela do jogo entre o menu e a seleção**: a tela CONTROLS e os logos são pulados atrás do "CARREGANDO".
+- **Qualquer controle** (v1.2.2): Xbox, Switch Pro, PlayStation, 8BitDo... são reconhecidos pelo nome dos botões, então a configuração vale pra todos. Troque de controle e continua funcionando. No F1 → Controles o rodapé mostra o que o controle está mandando na hora.
 - **Menu com F1**: as configurações abrem também por cima do menu inicial. O tema de abertura toca contínuo no menu (a 50%), sem ser cortado.
 - **ORDER SELECT por botão** (v1.2.0): no lugar de subir e descer na frente do adversário, cada jogador aperta uma vez:
   **A** = o 1º personagem escolhido começa, **B** = o 2º, **C** = o 3º. As colunas ficam congeladas até os dois

@@ -129,12 +129,16 @@ int menu_cfg_evento(const SDL_Event *e)
 				return 1;
 			}
 			grava_ligacao((Ligacao){LIG_TECLA, 0, (s16)s, 0});
-		} else if (e->type == SDL_JOYBUTTONDOWN) {
-			grava_ligacao((Ligacao){LIG_BOTAO, (u8)e->jbutton.which, e->jbutton.button, 0});
-		} else if (e->type == SDL_JOYHATMOTION && e->jhat.value && !(e->jhat.value & (e->jhat.value - 1))) {
-			grava_ligacao((Ligacao){LIG_HAT, (u8)e->jhat.which, 0, (s8)e->jhat.value});
-		} else if (e->type == SDL_JOYAXISMOTION && (e->jaxis.value > 24000 || e->jaxis.value < -24000)) {
-			grava_ligacao((Ligacao){LIG_EIXO, (u8)e->jaxis.which, e->jaxis.axis, (s8)(e->jaxis.value < 0 ? -1 : 1)});
+		} else if (e->type == SDL_CONTROLLERBUTTONDOWN) {
+			grava_ligacao((Ligacao){LIG_GCBOTAO, (u8)entrada_indice_instancia(e->cbutton.which), e->cbutton.button, 0});
+		} else if (e->type == SDL_CONTROLLERAXISMOTION && (e->caxis.value > 24000 || e->caxis.value < -24000) && e->caxis.axis <= SDL_CONTROLLER_AXIS_RIGHTY) {
+			grava_ligacao((Ligacao){LIG_GCEIXO, (u8)entrada_indice_instancia(e->caxis.which), e->caxis.axis, (s8)(e->caxis.value < 0 ? -1 : 1)});
+		} else if (e->type == SDL_JOYBUTTONDOWN && !entrada_instancia_reconhecida(e->jbutton.which)) {
+			grava_ligacao((Ligacao){LIG_BOTAO, (u8)entrada_indice_instancia(e->jbutton.which), e->jbutton.button, 0});
+		} else if (e->type == SDL_JOYHATMOTION && !entrada_instancia_reconhecida(e->jhat.which) && e->jhat.value && !(e->jhat.value & (e->jhat.value - 1))) {
+			grava_ligacao((Ligacao){LIG_HAT, (u8)entrada_indice_instancia(e->jhat.which), 0, (s8)e->jhat.value});
+		} else if (e->type == SDL_JOYAXISMOTION && !entrada_instancia_reconhecida(e->jaxis.which) && (e->jaxis.value > 24000 || e->jaxis.value < -24000)) {
+			grava_ligacao((Ligacao){LIG_EIXO, (u8)entrada_indice_instancia(e->jaxis.which), e->jaxis.axis, (s8)(e->jaxis.value < 0 ? -1 : 1)});
 		}
 		return 1;
 	}
@@ -149,14 +153,20 @@ int menu_cfg_evento(const SDL_Event *e)
 		case SDL_SCANCODE_TAB: aba = (aba + 1) % NABAS; linha = 0; return 1;
 		default: break;
 		}
-	} else if (e->type == SDL_JOYHATMOTION) {
+	} else if (e->type == SDL_JOYHATMOTION && !entrada_instancia_reconhecida(e->jhat.which)) {
 		int v = e->jhat.value;
 		t = v == SDL_HAT_UP ? 1 : v == SDL_HAT_DOWN ? 2 : v == SDL_HAT_LEFT ? 3 : v == SDL_HAT_RIGHT ? 4 : 0;
-	} else if (e->type == SDL_JOYBUTTONDOWN) {
+	} else if (e->type == SDL_JOYBUTTONDOWN && !entrada_instancia_reconhecida(e->jbutton.which)) {
 		int b = e->jbutton.button;
 		t = b == 0 ? 5 : b == 1 ? 6 : 0;
 		if (b == 4) { aba = (aba + NABAS - 1) % NABAS; linha = 0; return 1; }
 		if (b == 5) { aba = (aba + 1) % NABAS; linha = 0; return 1; }
+	} else if (e->type == SDL_CONTROLLERBUTTONDOWN) {
+		int b = e->cbutton.button;
+		t = b == SDL_CONTROLLER_BUTTON_DPAD_UP ? 1 : b == SDL_CONTROLLER_BUTTON_DPAD_DOWN ? 2 : b == SDL_CONTROLLER_BUTTON_DPAD_LEFT ? 3 :
+		    b == SDL_CONTROLLER_BUTTON_DPAD_RIGHT ? 4 : b == SDL_CONTROLLER_BUTTON_A ? 5 : b == SDL_CONTROLLER_BUTTON_B ? 6 : 0;
+		if (b == SDL_CONTROLLER_BUTTON_LEFTSHOULDER) { aba = (aba + NABAS - 1) % NABAS; linha = 0; return 1; }
+		if (b == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) { aba = (aba + 1) % NABAS; linha = 0; return 1; }
 	}
 	int n = linhas_aba();
 	switch (t) {
@@ -290,7 +300,14 @@ void menu_cfg_desenha(u32 tela[NEO_H][NEO_W])
 	}
 
 	// rodapé
-	const char *dica = capturando >= 0 ? "Esc pula   Del apaga" : aba == 1 ? "Enter grava a ação   Tab muda aba" : "^v escolhe   <> muda   Tab muda aba";
+	char lin[96];
+	if (aba == 1 && capturando < 0) {   // o que o controle está mandando agora: mostra na hora se ele é reconhecido e se os botões chegam
+		char est[64];
+		entrada_estado_texto(jogador, est, sizeof est);
+		snprintf(lin, sizeof lin, "c%d %s: %s", jogador + 1, entrada_num_controles() > jogador ? (entrada_reconhecido(jogador) ? "ok" : "cru") : "-", est);
+		if ((int)strlen(lin) > 44) lin[44] = 0;
+	}
+	const char *dica = capturando >= 0 ? "Esc pula   Del apaga" : aba == 1 ? lin : "^v escolhe   <> muda   Tab muda aba";
 	ui_caixa(0, NEO_H - 14, NEO_W - 1, NEO_H - 1, 0xff0a0d14u, 230);
 	ui_texto_centro(NEO_H - 11, dica, UI_APAGADO);
 	if (capturando >= 0) {

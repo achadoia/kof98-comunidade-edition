@@ -31,6 +31,8 @@ static void liga_tecla(int j, int a, int slot, SDL_Scancode s) { cfg.lig[j][a][s
 static void liga_botao(int j, int a, int slot, int d, int b) { cfg.lig[j][a][slot] = (Ligacao){LIG_BOTAO, (u8)d, (s16)b, 0}; }
 static void liga_hat(int j, int a, int slot, int d, int dir) { cfg.lig[j][a][slot] = (Ligacao){LIG_HAT, (u8)d, 0, (s8)dir}; }
 static void liga_eixo(int j, int a, int slot, int d, int e, int s) { cfg.lig[j][a][slot] = (Ligacao){LIG_EIXO, (u8)d, (s16)e, (s8)s}; }
+static void liga_gc(int j, int a, int slot, int d, int b) { cfg.lig[j][a][slot] = (Ligacao){LIG_GCBOTAO, (u8)d, (s16)b, 0}; }
+static void liga_gce(int j, int a, int slot, int d, int e, int s) { cfg.lig[j][a][slot] = (Ligacao){LIG_GCEIXO, (u8)d, (s16)e, (s8)s}; }
 
 void config_controles_padrao(int j)
 {
@@ -42,14 +44,19 @@ void config_controles_padrao(int j)
 		SDL_SCANCODE_KP_4, SDL_SCANCODE_KP_5, SDL_SCANCODE_KP_1, SDL_SCANCODE_KP_2, SDL_SCANCODE_2, SDL_SCANCODE_6,
 		SDL_SCANCODE_KP_7, SDL_SCANCODE_KP_8, SDL_SCANCODE_KP_9};
 	for (int a = 0; a < NACOES; a++) liga_tecla(j, a, 0, (j ? t2 : t1)[a]);
-	// controle padrão (numeração do SDL pra XInput): A=0 B=1 X=2 Y=3 LB=4 RB=5 Back=6 Start=7, direcional = hat 0
-	liga_hat(j, AC_CIMA, 1, j, SDL_HAT_UP); liga_hat(j, AC_BAIXO, 1, j, SDL_HAT_DOWN);
-	liga_hat(j, AC_ESQ, 1, j, SDL_HAT_LEFT); liga_hat(j, AC_DIR, 1, j, SDL_HAT_RIGHT);
-	liga_eixo(j, AC_CIMA, 2, j, 1, -1); liga_eixo(j, AC_BAIXO, 2, j, 1, 1);
-	liga_eixo(j, AC_ESQ, 2, j, 0, -1); liga_eixo(j, AC_DIR, 2, j, 0, 1);
-	liga_botao(j, AC_A, 1, j, 2); liga_botao(j, AC_B, 1, j, 3); liga_botao(j, AC_C, 1, j, 0); liga_botao(j, AC_D, 1, j, 1);
-	liga_botao(j, AC_START, 1, j, 7); liga_botao(j, AC_MOEDA, 1, j, 6);
-	liga_botao(j, AC_AB, 1, j, 4); liga_botao(j, AC_CD, 1, j, 5);
+	// controle reconhecido (Xbox, Switch Pro, PlayStation...): nomes fixos do SDL. Layout Xbox: X=A, Y=B, A=C, B=D,
+	// LB=A+B, RB=C+D, Start, Back=moeda; direcional + analógico esquerdo. Reserva (slot 2): hat/botão cru pra stick genérico.
+	liga_gc(j, AC_CIMA, 1, j, SDL_CONTROLLER_BUTTON_DPAD_UP); liga_gc(j, AC_BAIXO, 1, j, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+	liga_gc(j, AC_ESQ, 1, j, SDL_CONTROLLER_BUTTON_DPAD_LEFT); liga_gc(j, AC_DIR, 1, j, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+	liga_gce(j, AC_CIMA, 2, j, SDL_CONTROLLER_AXIS_LEFTY, -1); liga_gce(j, AC_BAIXO, 2, j, SDL_CONTROLLER_AXIS_LEFTY, 1);
+	liga_gce(j, AC_ESQ, 2, j, SDL_CONTROLLER_AXIS_LEFTX, -1); liga_gce(j, AC_DIR, 2, j, SDL_CONTROLLER_AXIS_LEFTX, 1);
+	liga_gc(j, AC_A, 1, j, SDL_CONTROLLER_BUTTON_X); liga_gc(j, AC_B, 1, j, SDL_CONTROLLER_BUTTON_Y);
+	liga_gc(j, AC_C, 1, j, SDL_CONTROLLER_BUTTON_A); liga_gc(j, AC_D, 1, j, SDL_CONTROLLER_BUTTON_B);
+	liga_gc(j, AC_START, 1, j, SDL_CONTROLLER_BUTTON_START); liga_gc(j, AC_MOEDA, 1, j, SDL_CONTROLLER_BUTTON_BACK);
+	liga_gc(j, AC_AB, 1, j, SDL_CONTROLLER_BUTTON_LEFTSHOULDER); liga_gc(j, AC_CD, 1, j, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+	liga_botao(j, AC_A, 2, j, 2); liga_botao(j, AC_B, 2, j, 3); liga_botao(j, AC_C, 2, j, 0); liga_botao(j, AC_D, 2, j, 1);
+	liga_botao(j, AC_START, 2, j, 7); liga_botao(j, AC_MOEDA, 2, j, 6);
+	liga_botao(j, AC_AB, 2, j, 4); liga_botao(j, AC_CD, 2, j, 5);
 }
 
 void config_padrao(void)
@@ -86,6 +93,8 @@ void config_descreve(const Ligacao *l, char *buf, int tam)
 		snprintf(buf, tam, "c%d %s", l->disp + 1, l->val == SDL_HAT_UP ? "cima" : l->val == SDL_HAT_DOWN ? "baixo" :
 			l->val == SDL_HAT_LEFT ? "esq" : "dir");
 		break;
+	case LIG_GCBOTAO: snprintf(buf, tam, "c%d %s", l->disp + 1, SDL_GameControllerGetStringForButton((SDL_GameControllerButton)l->cod)); break;
+	case LIG_GCEIXO: snprintf(buf, tam, "c%d %s%c", l->disp + 1, SDL_GameControllerGetStringForAxis((SDL_GameControllerAxis)l->cod), l->val < 0 ? '-' : '+'); break;
 	default: snprintf(buf, tam, "-"); break;
 	}
 }
@@ -97,6 +106,8 @@ static void lig_txt(const Ligacao *l, char *b, int t)
 	case LIG_BOTAO: snprintf(b, t, "j%db%d", l->disp, l->cod); break;
 	case LIG_EIXO: snprintf(b, t, "j%da%d%c", l->disp, l->cod, l->val < 0 ? '-' : '+'); break;
 	case LIG_HAT: snprintf(b, t, "j%dh%d", l->disp, l->val); break;
+	case LIG_GCBOTAO: snprintf(b, t, "g%db%d", l->disp, l->cod); break;
+	case LIG_GCEIXO: snprintf(b, t, "g%da%d%c", l->disp, l->cod, l->val < 0 ? '-' : '+'); break;
 	default: snprintf(b, t, "-"); break;
 	}
 }
@@ -109,6 +120,8 @@ static void txt_lig(const char *s, Ligacao *l)
 	else if (sscanf(s, "j%da%d%c", &d, &c, &sn) == 3) *l = (Ligacao){LIG_EIXO, (u8)d, (s16)c, (s8)(sn == '-' ? -1 : 1)};
 	else if (sscanf(s, "j%db%d", &d, &c) == 2) *l = (Ligacao){LIG_BOTAO, (u8)d, (s16)c, 0};
 	else if (sscanf(s, "j%dh%d", &d, &c) == 2) *l = (Ligacao){LIG_HAT, (u8)d, 0, (s8)c};
+	else if (sscanf(s, "g%da%d%c", &d, &c, &sn) == 3) *l = (Ligacao){LIG_GCEIXO, (u8)d, (s16)c, (s8)(sn == '-' ? -1 : 1)};
+	else if (sscanf(s, "g%db%d", &d, &c) == 2) *l = (Ligacao){LIG_GCBOTAO, (u8)d, (s16)c, 0};
 }
 
 // ---------------------------------------------------------------- arquivo
@@ -135,6 +148,36 @@ int config_salvar(const char *arq)
 		}
 	fclose(f);
 	return 0;
+}
+
+// Configs de antes de 18/10 guardavam o controle pelo joystick cru com os números do Xbox (hat + bt0-7). Quem nunca
+// mexeu no controle tem exatamente esse padrão antigo: troca pelo padrão novo (game controller), que vale pra
+// qualquer controle reconhecido. Quem configurou o controle à mão fica como está.
+static void migra_controle(int j)
+{
+	Config velha;
+	memcpy(&velha, &cfg, sizeof velha);
+	// padrão antigo (slots 1 e 2) montado do mesmo jeito que config_controles_padrao fazia antes
+	Ligacao ant[NACOES][NLIG];
+	memset(ant, 0, sizeof ant);
+	ant[AC_CIMA][1] = (Ligacao){LIG_HAT, (u8)j, 0, (s8)SDL_HAT_UP}; ant[AC_BAIXO][1] = (Ligacao){LIG_HAT, (u8)j, 0, (s8)SDL_HAT_DOWN};
+	ant[AC_ESQ][1] = (Ligacao){LIG_HAT, (u8)j, 0, (s8)SDL_HAT_LEFT}; ant[AC_DIR][1] = (Ligacao){LIG_HAT, (u8)j, 0, (s8)SDL_HAT_RIGHT};
+	ant[AC_CIMA][2] = (Ligacao){LIG_EIXO, (u8)j, 1, -1}; ant[AC_BAIXO][2] = (Ligacao){LIG_EIXO, (u8)j, 1, 1};
+	ant[AC_ESQ][2] = (Ligacao){LIG_EIXO, (u8)j, 0, -1}; ant[AC_DIR][2] = (Ligacao){LIG_EIXO, (u8)j, 0, 1};
+	ant[AC_A][1] = (Ligacao){LIG_BOTAO, (u8)j, 2, 0}; ant[AC_B][1] = (Ligacao){LIG_BOTAO, (u8)j, 3, 0};
+	ant[AC_C][1] = (Ligacao){LIG_BOTAO, (u8)j, 0, 0}; ant[AC_D][1] = (Ligacao){LIG_BOTAO, (u8)j, 1, 0};
+	ant[AC_START][1] = (Ligacao){LIG_BOTAO, (u8)j, 7, 0}; ant[AC_MOEDA][1] = (Ligacao){LIG_BOTAO, (u8)j, 6, 0};
+	ant[AC_AB][1] = (Ligacao){LIG_BOTAO, (u8)j, 4, 0}; ant[AC_CD][1] = (Ligacao){LIG_BOTAO, (u8)j, 5, 0};
+	for (int a = 0; a < NACOES; a++)
+		for (int k = 1; k < NLIG; k++) {
+			const Ligacao *l = &cfg.lig[j][a][k];
+			if (l->tipo == LIG_NADA) continue;
+			if (memcmp(l, &ant[a][k], sizeof *l)) return;   // mexeu no controle: não migra
+		}
+	Ligacao tecl[NACOES];
+	for (int a = 0; a < NACOES; a++) tecl[a] = cfg.lig[j][a][0];
+	config_controles_padrao(j);
+	for (int a = 0; a < NACOES; a++) cfg.lig[j][a][0] = tecl[a];   // teclado do usuário fica
 }
 
 int config_carregar(const char *arq)
@@ -181,6 +224,8 @@ int config_carregar(const char *arq)
 		}
 	}
 	fclose(f);
+	migra_controle(0);
+	migra_controle(1);
 	cfg.cpu = 200;   // fixo: sem a lentidão do Neo Geo
 	if (cfg.volume < 0 || cfg.volume > 100) cfg.volume = 80;
 	return 0;

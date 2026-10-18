@@ -411,6 +411,7 @@ int main(int argc, char **argv)
 	if (getenv("KOF_VSYNC")) cfg.vsync = atoi(getenv("KOF_VSYNC"));
 	if (getenv("KOF_FILTRO")) cfg.filtro = atoi(getenv("KOF_FILTRO")) % NFILTROS;
 #ifdef KOF_TESTE
+	if (getenv("KOF_CFG")) menu_cfg_abre(atoi(getenv("KOF_CFG")) - 1);
 	if (getenv("KOF_RUNAHEAD")) cfg.run_ahead = atoi(getenv("KOF_RUNAHEAD"));
 	if (getenv("KOF_RITMO")) cfg.ritmo_monitor = atoi(getenv("KOF_RITMO"));
 #endif
