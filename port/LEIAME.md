@@ -55,7 +55,13 @@ Sons do menu: cursor = comando 70 e confirmar = 71 do próprio MODE SELECT (o av
 rápido apertando A a cada 24 quadros enquanto `$10A790 == 1` (tela CONTROLS etc.) e só entrega o jogo 40 quadros
 depois de `$10A790 == 2` (seleção de personagem). OPTION é exceção (fica no MODE SELECT). Teste: `KOF_DEBUG_PILOTO=1`.
 
-### ORDER SELECT por botão (`src/ordem.c`)
+### ORDER SELECT em duas etapas (`src/ordem.c`)
+18/10 noite: etapa 1 "ESCOLHA O MODO" (cursor nos 3 retratos, <> troca o modo de cada um, A confirma) e etapa 2 "ESCOLHA A ORDEM"
+(A/B/C secreto). O modo no Anniversary é POR PERSONAGEM: cada confirmação grava o modo da caixa naquela posição e a caixa
+volta pra ADVANCED (esquerda 1x = SPECIAL, 2x = EXTRA); a confirmação final grava o do 3º. Provado: módulo e sequência manual
+equivalente dão os mesmos bytes ($10D938 e $10A854-56). Detalhes antigos abaixo.
+
+#### Versão anterior (v1.2.0)
 No ORDER SELECT cada jogador aperta UMA vez: **A** = o 1º personagem que escolheu começa, **B** = o 2º, **C** = o 3º
 (os outros seguem na ordem da escolha). O EXE traduz na sequência original (cima/baixo giram a coluna, A confirma o de
 baixo, 2 confirmações; a 2ª só vale ~40 quadros depois) e congela as duas colunas na imagem de antes de qualquer

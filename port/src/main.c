@@ -306,6 +306,7 @@ int main(int argc, char **argv)
 		if (getenv("KOF_CFG")) menu_cfg_abre(atoi(getenv("KOF_CFG")) - 1);
 #ifdef KOF_TESTE
 		if (getenv("KOF_MENU_MUSICA")) musica_modo_menu = 1;
+		if (getenv("KOF_ORDEM")) ordem_ligada = atoi(getenv("KOF_ORDEM"));
 #endif
 #ifdef KOF_TESTE
 		{ void frontend_teste_arte(void); if (getenv("KOF_VIGIA_TESTE")) frontend_teste_arte(); }
