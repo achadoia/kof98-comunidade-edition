@@ -65,7 +65,7 @@ Quer entrar no jogo também, ou tem ideia de personagem, golpe ou modo? Chama no
 - **Menu com F1**: as configurações abrem também por cima do menu inicial. O tema de abertura toca contínuo no menu (a 50%), sem ser cortado.
 - **ORDER SELECT em duas etapas** (v1.3.0): primeiro "ESCOLHA O MODO", com cursor visível em cada um dos 3 personagens
   (cima/baixo escolhe quem, esquerda/direita troca ADVANCED / EXTRA / SPECIAL, A confirma); depois "ESCOLHA A ORDEM":
-  **A** = o 1º personagem escolhido começa, **B** = o 2º, **C** = o 3º, em segredo. As colunas ficam congeladas até os dois
+  o botão desenhado ao lado de cada retrato (**A** vermelho em cima, **B** amarelo no meio, **C** verde embaixo) escolhe quem começa, em segredo. As colunas ficam congeladas até os dois
   terminarem, então ninguém sabe a ordem do outro.
 
 ### Por vir

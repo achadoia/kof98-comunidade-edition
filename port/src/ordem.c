@@ -1,8 +1,8 @@
 // ORDER SELECT em duas etapas (18/10, pedido do usuário):
 //   1) "ESCOLHA O MODO": cursor visível nos 3 retratos, esquerda/direita troca ADVANCED/EXTRA/SPECIAL de cada
 //      um (seleção livre, todo mundo vê), A confirma.
-//   2) "ESCOLHA A ORDEM": uma tecla só, A = o 1º personagem escolhido começa, B = o 2º, C = o 3º; os outros
-//      seguem na ordem da escolha. Secreta: as duas colunas ficam congeladas na imagem de antes de qualquer
+//   2) "ESCOLHA A ORDEM": uma tecla só, com o botão desenhado ao lado de cada retrato: A = o de cima, B = o do
+//      meio, C = o de baixo (o grande); os outros seguem na ordem da escolha. Secreta: as duas colunas ficam congeladas na imagem de antes de qualquer
 //      escolha até os dois jogadores terminarem.
 // O EXE traduz tudo na sequência original do jogo. Mecânica do Anniversary (lab 18/10): cima/baixo giram a
 // coluna (o de baixo, grande, é o candidato), A confirma o candidato na próxima posição; a caixa de modo
@@ -104,7 +104,7 @@ void ordem_entradas(void)
 			if (novo & 0x10) etapa[j] = ET_ORDEM;
 			break;
 		case ET_ORDEM: {
-			int l = (novo & 0x10) ? 0 : (novo & 0x20) ? 1 : (novo & 0x40) ? 2 : -1;
+			int l = (novo & 0x10) ? IDX_POS[0] : (novo & 0x20) ? IDX_POS[1] : (novo & 0x40) ? IDX_POS[2] : -1;   // A topo, B meio, C baixo
 			if (l < 0 || !pronta) break;
 			int m[3] = {modo[j][0], modo[j][1], modo[j][2]};
 			for (int k = 0; k < 3; k++) modo[j][k] = toques_modo(m[k]);   // vira "toques de esquerda" pra montar
@@ -133,6 +133,25 @@ static void rotulo(int x, int y, const char *s, u32 cor, int sel)
 	ui_texto(x + 4, y, s, cor);
 }
 
+// botão redondo como os da tela CONTROLS do jogo: A vermelho, B amarelo, C verde, letra branca, sombra embaixo
+static void botao(u32 tela[NEO_H][NEO_W], int cx, int cy, int qual)
+{
+	static const u32 COR[3] = {0xffd82828u, 0xffe8b418u, 0xff28b060u}, CLARO[3] = {0xffff7070u, 0xffffe070u, 0xff70e8a0u};
+	static const char *L[3] = {"A", "B", "C"};
+	const int r = 10;
+	for (int dy = -r - 2; dy <= r + 3; dy++)
+		for (int dx = -r - 2; dx <= r + 2; dx++) {
+			int x = cx + dx, y = cy + dy;
+			if (x < 0 || x >= NEO_W || y < 0 || y >= NEO_H) continue;
+			int d2 = dx * dx + dy * dy, d2s = dx * dx + (dy - 3) * (dy - 3);
+			if (d2 <= r * r) tela[y][x] = (dx + dy < -r + 3) ? CLARO[qual] : COR[qual];     // face com brilho em cima
+			else if (d2s <= r * r) tela[y][x] = 0xff303030u;                                  // sombra/lateral
+			else if (d2 <= (r + 2) * (r + 2) && dy > 0) tela[y][x] = 0xff101010u;              // contorno embaixo
+		}
+	ui_alvo(tela);
+	ui_texto(cx - 3, cy - 4, L[qual], 0xffffffffu);
+}
+
 // colunas congeladas + etapa de cada jogador, por cima do quadro
 void ordem_desenha(u32 tela[NEO_H][NEO_W])
 {
@@ -155,11 +174,12 @@ void ordem_desenha(u32 tela[NEO_H][NEO_W])
 				snprintf(s, sizeof s, "%s%s", sel ? "> " : "", NOME_MODO[m]);
 				rotulo(x0 + 4, Y_POS[p], s, COR_MODO[m], sel);
 			}
-		} else {
-			for (int p = 0; p < 3; p++) rotulo(x0 + 4, Y_POS[p], NOME_MODO[modo[j][IDX_POS[p]]], COR_MODO[modo[j][IDX_POS[p]]], 0);
+		} else if (et == ET_ORDEM) {
+			for (int p = 0; p < 3; p++) botao(tela, j ? NEO_W - 18 : 18, Y_POS[p] + 4, p);   // A topo, B meio, C baixo
 		}
+		ui_alvo(tela);
 		const char *l1 = et == ET_MODO ? "ESCOLHA O MODO" : et == ET_ORDEM ? "ESCOLHA A ORDEM" : "PRONTO";
-		const char *l2 = et == ET_MODO ? "^v quem  <> modo  A ok" : et == ET_ORDEM ? "A=1º  B=2º  C=3º" : "esperando o outro";
+		const char *l2 = et == ET_MODO ? "^v quem  <> modo  A ok" : et == ET_ORDEM ? "quem começa?" : "esperando o outro";
 		int w = ui_largura(l1) > ui_largura(l2) ? ui_largura(l1) : ui_largura(l2);
 		ui_caixa(x0 + 70 - w / 2 - 6, 158, x0 + 70 + w / 2 + 6, 184, 0xff0a0d14u, 225);
 		ui_texto(x0 + 70 - ui_largura(l1) / 2, 162, l1, et == ET_PRONTO ? 0xff60ff90u : 0xffffe060u);
