@@ -66,7 +66,13 @@ Quer entrar no jogo também, ou tem ideia de personagem, golpe ou modo? Chama no
 1. Baixe o `KOF98-Comunidade-Edition.exe` na aba **Releases** e coloque numa pasta.
 2. Na mesma pasta (ou numa pasta `roms` ao lado), coloque os arquivos **da sua cópia** do jogo:
    - `kof98ae2016.zip` — The King of Fighters '98 Anniversary Edition 2016 (o FBNeo chama de `kof98ae`);
+   - `kof98.zip` — The King of Fighters '98 original. **Obrigatório**: o Anniversary é um "clone" e usa os
+     sprites `242-c3`/`242-c4` e o áudio `242-v1` a `242-v4` desse zip (sem ele, personagens como a Yuri ficam
+     invisíveis e o chip toca vozes trocadas e ruído). Se o seu `kof98ae2016.zip` já tiver esses arquivos dentro,
+     o `kof98.zip` não é necessário;
    - `neogeo.zip` — BIOS do Neo Geo (com `neo-epo.bin`, `sfix`, `sm1` e `000-lo`).
+   
+   Faltando qualquer arquivo, o programa avisa qual é e não abre.
    
    **Nenhum arquivo do jogo vem aqui.** O programa não baixa nem indica onde conseguir ROM.
 3. Abra o EXE. Se o Windows reclamar, clique em *Mais informações → Executar assim mesmo*.

@@ -1,8 +1,10 @@
 # KOF98 Anniversary — port nativo pra PC
 
 EXE próprio (`bin/kof98.exe`) que roda o KOF98 Anniversary 2016 sem emulador externo. A ROM **não**
-vem dentro do EXE: ele lê os zips do usuário ao abrir (`roms/kof98aemod.zip` + `roms/neogeo.zip` ao lado
-do EXE, ou os do FBNeo/MAME desta máquina, ou zips passados na linha de comando).
+vem dentro do EXE: ele lê os zips do usuário ao abrir (`roms/kof98ae2016.zip` + `roms/kof98.zip` + `roms/neogeo.zip`
+ao lado do EXE, ou zips passados na linha de comando). O `kof98.zip` original é obrigatório: o Anniversary é clone e
+pega c3/c4 e v1-v4 dele (18/10: sem eles a Yuri ficava invisível e o chip tocava vozes trocadas/ruído — `rom.c`
+agora recusa set incompleto, posiciona cada V ROM pelo índice e prefere os arquivos `242ae-*` quando o nome repete).
 
 ## Controles (padrão — tudo muda no F1)
 | | P1 | P2 |

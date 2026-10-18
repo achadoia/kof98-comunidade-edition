@@ -201,7 +201,7 @@ int main(int argc, char **argv)
 	neo_cpu_pct = cfg.cpu;
 
 	static char achados[8][600];
-	if (!nz) {                       // todo .zip ao lado do EXE e em roms\ (kof98ae2016.zip + neogeo.zip)
+	if (!nz) {                       // todo .zip ao lado do EXE e em roms\ (kof98ae2016.zip + kof98.zip + neogeo.zip)
 		char *bp = SDL_GetBasePath();
 		const char *pastas[2] = {"roms/", ""};
 		for (int pi = 0; pi < 2 && nz < 8; pi++) {
@@ -237,6 +237,7 @@ int main(int argc, char **argv)
 		char msg[900];
 		snprintf(msg, sizeof msg, "%s\n\nColoque na mesma pasta do jogo (ou numa pasta roms\\ ao lado dele):\n"
 			"  - kof98ae2016.zip  (The King of Fighters '98 Anniversary Edition 2016; o FBNeo chama de kof98ae)\n"
+			"  - kof98.zip  (The King of Fighters '98 original: o Anniversary usa os sprites c3/c4 e o som v1-v4 dele)\n"
 			"  - neogeo.zip  (BIOS do Neo Geo, com neo-epo.bin, sfix, sm1 e 000-lo)\n\n"
 			"Os dois vêm da sua cópia do jogo: nenhum deles acompanha o programa.", erro);
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "KOF '98 Comunidade Edition", msg, NULL);

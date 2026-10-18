@@ -33,9 +33,12 @@ static int base_igual(const char *nome, const char *alvo)
 	return *b == 0 && *alvo == 0;
 }
 
-// procura um arquivo por extensão (ou nome exato se exato=1) no primeiro zip que tiver
+// procura um arquivo por extensão (ou nome exato se exato=1) nos zips. Com o kof98.zip original ao lado
+// (o Anniversary é um "clone": pega c3/c4 e v1-v4 do jogo pai), o mesmo ".c1" existe nos dois zips:
+// o do hack (242ae-*) tem prioridade.
 static u8 *ler(Zips *zs, const char *alvo, int exato, size_t *tam)
 {
+	int zi = -1; mz_uint fi = 0; int prio = -1;
 	for (int i = 0; i < zs->n; i++) {
 		mz_uint nf = mz_zip_reader_get_num_files(&zs->z[i]);
 		for (mz_uint f = 0; f < nf; f++) {
@@ -43,9 +46,15 @@ static u8 *ler(Zips *zs, const char *alvo, int exato, size_t *tam)
 			mz_zip_reader_get_filename(&zs->z[i], f, nome, sizeof nome);
 			int ok = exato ? base_igual(nome, alvo) : termina_com(nome, alvo);
 			if (!ok) continue;
-			void *p = mz_zip_reader_extract_to_heap(&zs->z[i], f, tam, 0);
-			if (p) return p;
+			const char *b = strrchr(nome, '/');
+			b = b ? b + 1 : nome;
+			int p = (tolower((unsigned char)b[0]) == '2' && b[1] == '4' && b[2] == '2' && tolower((unsigned char)b[3]) == 'a' && tolower((unsigned char)b[4]) == 'e') ? 1 : 0;
+			if (p > prio) { prio = p; zi = i; fi = f; }
 		}
+	}
+	if (zi >= 0) {
+		void *p = mz_zip_reader_extract_to_heap(&zs->z[zi], fi, tam, 0);
+		if (p) return p;
 	}
 	*tam = 0;
 	return NULL;
@@ -137,18 +146,24 @@ int roms_load(const char *const *zips, int nzips, int aes, char *erro, size_t er
 	R.m1_size = (u32)tm;
 	if (!R.s1 || !R.m1) { snprintf(erro, erro_tam, "S1/M1 não encontrados"); return 1; }
 
-	// V ROMs: v1..v8 concatenadas
+	// V ROMs: v1..v8, cada uma na posição do seu índice (faltando uma, as outras não podem escorregar:
+	// o chip tocaria a amostra errada)
 	u8 *vs[8] = {0};
-	size_t vt[8] = {0}, vtot = 0;
+	size_t vt[8] = {0}, vmax = 0;
+	int nv = 0;
+	char faltam[400] = "";
 	for (int i = 0; i < 8; i++) {
 		char ext[8];
 		snprintf(ext, sizeof ext, ".v%d", i + 1);
 		vs[i] = ler(&zs, ext, 0, &vt[i]);
-		vtot += vt[i];
+		if (vs[i]) { nv = i + 1; if (vt[i] > vmax) vmax = vt[i]; }
 	}
+	for (int i = 0; i < nv; i++) if (!vs[i]) { char t[16]; snprintf(t, sizeof t, " v%d", i + 1); strncat(faltam, t, sizeof faltam - strlen(faltam) - 1); }
+	size_t vtot = 0;
+	for (int i = 0; i < nv; i++) vtot += vs[i] ? vt[i] : vmax;
 	R.vrom_size = (u32)vtot;
-	R.vrom = malloc(vtot ? vtot : 1);
-	for (size_t i = 0, o = 0; i < 8; i++) { if (vs[i]) { memcpy(R.vrom + o, vs[i], vt[i]); o += vt[i]; free(vs[i]); } }
+	R.vrom = calloc(1, vtot ? vtot : 1);
+	for (size_t i = 0, o = 0; i < (size_t)nv; i++) { if (vs[i]) { memcpy(R.vrom + o, vs[i], vt[i]); o += vt[i]; free(vs[i]); } else o += vmax; }
 
 	// C ROMs: pares (c1,c2), (c3,c4)... intercalados byte a byte (load16_byte)
 	u8 *cs[16] = {0};
@@ -161,6 +176,11 @@ int roms_load(const char *const *zips, int nzips, int aes, char *erro, size_t er
 		if (cs[i]) { if (ct[i] > cmax) cmax = ct[i]; npares = i / 2 + 1; }
 	}
 	if (!npares) { snprintf(erro, erro_tam, "sprites (.c1...) não encontrados"); return 1; }
+	for (int i = 0; i < npares * 2; i++) if (!cs[i]) { char t[16]; snprintf(t, sizeof t, " c%d", i + 1); strncat(faltam, t, sizeof faltam - strlen(faltam) - 1); }
+	if (faltam[0]) {   // set incompleto: personagens invisíveis e sons trocados (ex.: zip do Anniversary sem os arquivos do kof98 original)
+		snprintf(erro, erro_tam, "faltam arquivos da ROM:%s (o kof98ae2016.zip usa c3, c4 e v1-v4 do kof98.zip original)", faltam);
+		return 1;
+	}
 	u32 spr_tam = (u32)(npares * 2 * cmax);
 	u32 buf = pot2(spr_tam);
 	R.spr = calloc(1, buf);

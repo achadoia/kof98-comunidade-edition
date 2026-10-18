@@ -287,6 +287,17 @@ extern "C" int audio_pega_amostras(s16 *dst, int max_pares)
 	}
 	musica_mistura(dst, n);
 	efeitos_mistura(dst, n);
+	// limitador suave: chip + música do arquivo + vozes do UM somados podem passar de 16 bits;
+	// em vez de cortar reto (estalo/estouro), comprime só o que passa de 3/4 da escala
+	for (int i = 0; i < n * 2; i++) {
+		int v = dst[i];
+		const int T = 24576;
+		if (v > T || v < -T) {
+			double x = ((v < 0 ? -v : v) - T) / (32767.0 - T);
+			double y = T + (32767.0 - T) * (x / (1.0 + x));
+			dst[i] = (s16)(v < 0 ? -y : y);
+		}
+	}
 	return n;
 }
 
