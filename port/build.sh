@@ -19,7 +19,7 @@ compila() { # $1 = compilador, $2 = fonte
 	OBJS="$OBJS $o"
 }
 OBJS=""
-for f in src/main.c ${SOLO:+src/embutido.c} src/neo.c src/video.c src/rom.c src/estado.c src/m68k_estado.c src/treino.c src/ui.c src/config.c src/entrada.c src/menu_cfg.c src/musica.c src/efeitos.c src/frontend.c src/dec_impl.c \
+for f in src/main.c ${SOLO:+src/embutido.c} src/neo.c src/video.c src/rom.c src/estado.c src/m68k_estado.c src/treino.c src/ui.c src/config.c src/entrada.c src/menu_cfg.c src/musica.c src/efeitos.c src/frontend.c src/ordem.c src/dec_impl.c \
          $TP/Musashi/m68kcpu.c $TP/Musashi/m68kops.c $TP/Musashi/m68kdasm.c $TP/Musashi/softfloat/softfloat.c \
          $TP/z80/z80.c $TP/miniz/miniz.c; do compila cc "$f"; done
 for f in src/audio.cpp $TP/ymfm/src/ymfm_opn.cpp $TP/ymfm/src/ymfm_adpcm.cpp $TP/ymfm/src/ymfm_ssg.cpp; do compila c++ "$f"; done

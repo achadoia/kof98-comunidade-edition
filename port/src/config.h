@@ -21,6 +21,7 @@ typedef struct {
 	int run_ahead;               // 0-2 quadros emulados à frente (menos atraso de resposta que o Neo Geo)
 	int ritmo_monitor;           // 1 = roda a 60 Hz (ou múltiplo) com vsync: sem engasgo de 59,19 vs 60
 	int sprites_sem_limite;      // 1 = ignora o limite de 96 sprites por linha (nada some em cena cheia)
+	int ordem_botao;             // 1 = ORDER SELECT por A/B/C com as colunas escondidas do adversário
 	Ligacao lig[2][NACOES][NLIG];
 } Config;
 

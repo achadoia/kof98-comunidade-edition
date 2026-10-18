@@ -17,6 +17,7 @@
 #include "musica.h"
 #include "efeitos.h"
 #include "frontend.h"
+#include "ordem.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -325,6 +326,7 @@ int main(int argc, char **argv)
 			neo_in_p1 = neo_in_p2 = 0xff; neo_in_start = 0x0f; neo_in_coin = 0x07; neo_in_test = 1;
 			aplica_roteiro();
 			treino_entradas();
+			ordem_entradas();
 			config_aplica_cenario();
 #ifdef KOF_TESTE
 			{   // KOF_POKE="endereco:valor:ini:fim" (hexa:hexa:dec:dec) — escreve um byte a cada quadro no intervalo
@@ -377,6 +379,7 @@ int main(int argc, char **argv)
 			fclose(fw);
 		}
 		memcpy(tela, neo_fb, sizeof tela);
+		ordem_desenha(tela);
 		treino_desenha(tela);
 		menu_cfg_desenha(tela);
 #ifdef KOF_TESTE
@@ -505,6 +508,7 @@ int main(int argc, char **argv)
 		neo_cpu_pct = cfg.cpu;
 		musica_ligada = cfg.musica_arquivos;
 		efeitos_ligados = cfg.efeitos_arquivos;
+		ordem_ligada = cfg.ordem_botao;
 
 		entrada_le();
 		int pausado = !frontend_ativo && (cfgmenu_aberto || treino_aberto || (sem_foco && cfg.pausa_sem_foco));
@@ -527,6 +531,7 @@ int main(int argc, char **argv)
 #endif
 			if (!piloto && SDL_GetKeyboardState(NULL)[SDL_SCANCODE_F2]) neo_in_test = 0;
 			if (!piloto) treino_entradas();
+			if (!piloto) ordem_entradas();
 			config_aplica_cenario();
 			Uint64 tq = SDL_GetPerformanceCounter();
 			neo_frame();
@@ -562,6 +567,7 @@ int main(int argc, char **argv)
 		if (frontend_ativo) frontend_desenha(ren);
 		else {
 		memcpy(tela, neo_fb, sizeof tela);
+		ordem_desenha(tela);
 		treino_desenha(tela);
 		menu_cfg_desenha(tela);
 		fps_n++;

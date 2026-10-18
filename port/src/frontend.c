@@ -42,7 +42,7 @@ static const int LINHA_Y[5] = {200, 272, 345, 420, 493};   // centro de cada lin
 static int piloto, alvo;
 static int cursor_ini;        // item onde o cursor do MODE SELECT estava ao escolher (voltando do OPTION fica no 6)
 static int vigia_n;           // quadros seguidos com o MODE SELECT original na tela
-static u32 q_rel, q_escolha, q_som;   // quadros desde que o menu abriu (neo_reset não zera neo_quadros); q_som = confirmação
+static u32 q_rel, q_escolha, q_som, q_fim;   // quadros desde que o menu abriu (neo_reset não zera neo_quadros); q_som = confirmação
 
 #ifdef KOF_SOLO
 #include "stb_image.h"
@@ -179,6 +179,7 @@ static void escolhe(int *rodando)
 	if (cursor_ini < 0 || cursor_ini > 6 || m68k_read_memory_8(RAM_TELA) != 1) cursor_ini = 0;
 	piloto = 2;
 	q_escolha = 0;
+	q_fim = 0;
 	q_som = q_rel;
 	audio_comando(0x71);               // som de confirmação do próprio MODE SELECT
 	sujo = 1;
@@ -247,12 +248,24 @@ int frontend_piloto(void)
 		if (q < Q_MENU) return 1;
 		if (!q_escolha) q_escolha = q;
 		u32 r = q - q_escolha;
+#ifdef KOF_TESTE
+		if (getenv("KOF_DEBUG_PILOTO") && r < 130 && r % 4 == 0) fprintf(stderr, "piloto2 q=%u r=%u cursor=%02x tela=%d fase=%02x\n", q, r, m68k_read_memory_8(RAM_CURSOR), m68k_read_memory_8(RAM_TELA), m68k_read_memory_8(RAM_FASE));
+#endif
 		int toques = alvo - cursor_ini, bit = 2;                 // baixo; voltando do OPTION o cursor está no 6: sobe
 		if (toques < 0) { toques = -toques; bit = 1; }
-		for (int i = 0; i < toques; i++) if (r >= (u32)(i * PASSO) && r < (u32)(i * PASSO + 4)) neo_in_p1 &= (u8)bit;
+		for (int i = 0; i < toques; i++) if (r >= (u32)(i * PASSO) && r < (u32)(i * PASSO + 4)) neo_in_p1 &= (u8)~bit;
 		u32 qa = (u32)(toques * PASSO + 8);
 		if (r >= qa && r < qa + 5) neo_in_p1 &= (u8)~0x10;                                                           // A
-		if (r >= qa + 30) { piloto = 0; frontend_ativo = 0; }
+		if (alvo == 6) { if (r >= qa + 30) { piloto = 0; frontend_ativo = 0; } }
+		else if (r >= qa + 30) {
+			int tela = m68k_read_memory_8(RAM_TELA);
+#ifdef KOF_TESTE
+			if (getenv("KOF_DEBUG_PILOTO") && r % 30 == 0) fprintf(stderr, "piloto q=%u r=%u tela=%d q_fim=%u cursor=%02x option=%02x fase=%02x alvo=%d toques=%d\n", q, r, tela, q_fim, m68k_read_memory_8(RAM_CURSOR), m68k_read_memory_8(RAM_OPTION), m68k_read_memory_8(RAM_FASE), alvo, toques);
+#endif
+			if (tela == 1) { if ((r - qa) % 24 < 4) neo_in_p1 &= (u8)~0x10; }   // CONTROLS e afins: pula com A
+			else if (tela == 2) { if (!q_fim) q_fim = r; if (r >= q_fim + 40) { piloto = 0; frontend_ativo = 0; } }
+			if (r > qa + 1200) { piloto = 0; frontend_ativo = 0; }            // segurança: nunca prende o jogador
+		}
 	}
 	return 1;
 }

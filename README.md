@@ -60,6 +60,10 @@ Quer entrar no jogo também, ou tem ideia de personagem, golpe ou modo? Chama no
 - **Ritmo do monitor**: o jogo roda a 60 Hz casado com o vsync (sem o engasgo de 59,19 Hz na tela de 60; 120 Hz também).
 - **Sprites sem limite**: nada some em cena cheia (o hardware cortava em 96 por linha).
 - Menu Comunidade Edition com som e **no lugar do MODE SELECT original sempre** (Start no título, saída do OPTION, fim de jogo).
+- **Nenhuma tela do jogo entre o menu e a seleção**: a tela CONTROLS e os logos são pulados atrás do "CARREGANDO".
+- **ORDER SELECT por botão** (v1.2.0): no lugar de subir e descer na frente do adversário, cada jogador aperta uma vez:
+  **A** = o 1º personagem escolhido começa, **B** = o 2º, **C** = o 3º. As colunas ficam congeladas até os dois
+  confirmarem, então ninguém sabe a ordem do outro. ADVANCED/EXTRA/SPECIAL continuam: esquerda/direita e A confirma.
 
 ### Por vir
 - Netplay grátis pra jogar com os streamers.

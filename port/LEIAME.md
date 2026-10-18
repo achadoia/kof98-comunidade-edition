@@ -51,6 +51,19 @@ já no estado "pronto pra escolher" (`q_rel = Q_MENU`). Bytes do Anniversary ach
 título, `$10051C` 1 dentro do OPTION, `$1085D2` cursor do MODE SELECT (0-6; o piloto sobe ou desce a partir dele, então
 voltando do OPTION também funciona). Teste: `KOF_VIGIA_TESTE=1` sem janela imprime os quadros em que abriria.
 Sons do menu: cursor = comando 70 e confirmar = 71 do próprio MODE SELECT (o avanço rápido espera 30 quadros pra o som sair).
+**Nenhuma tela do jogo entre o menu e a seleção** (18/10): depois de confirmar o modo, o piloto continua em avanço
+rápido apertando A a cada 24 quadros enquanto `$10A790 == 1` (tela CONTROLS etc.) e só entrega o jogo 40 quadros
+depois de `$10A790 == 2` (seleção de personagem). OPTION é exceção (fica no MODE SELECT). Teste: `KOF_DEBUG_PILOTO=1`.
+
+### ORDER SELECT por botão (`src/ordem.c`)
+No ORDER SELECT cada jogador aperta UMA vez: **A** = o 1º personagem que escolheu começa, **B** = o 2º, **C** = o 3º
+(os outros seguem na ordem da escolha). O EXE traduz na sequência original (cima/baixo giram a coluna, A confirma o de
+baixo, 2 confirmações; a 2ª só vale ~40 quadros depois) e congela as duas colunas na imagem de antes de qualquer
+escolha até os dois confirmarem o modo, então o adversário não vê nada. Depois da ordem a tela original segue:
+esquerda/direita = ADVANCED/EXTRA/SPECIAL, A confirma (3ª confirmação). RAM: `$1005C7 == 0x10` só nessa tela,
+`$1005CE` fase (5 = aceita entrada), `$10A84D/$10A85E` confirmações P1/P2, `$10A854-56/$10A865-67` ordem final
+(índice na escolha). Opção "Ordem do trio por botão" no F1 → Melhorias (`ordem_botao`). Lab: estado da tela de ordem
+= Team VS por roteiro (`700-704:st=1,960-963:p1=2,1080-1084:p1=10,1300-1303:p1=10,...`), pronta a partir de ~1712.
 Arte 1672x941 em `arte/menu_fundo.png` (gerada no ChatGPT pelo usuário; o build converte pra `bin/arte/menu_fundo.bmp`).
 O jogo roda por trás: um piloto aperta Start no título (quadro 700 após o reset) e espera no MODE SELECT (pronto no 960;
 não volta sozinho pro título). Ao escolher, desce até o item e aperta A em avanço rápido (12 quadros por giro, som

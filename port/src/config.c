@@ -70,6 +70,7 @@ void config_padrao(void)
 	cfg.run_ahead = 1;
 	cfg.ritmo_monitor = 1;
 	cfg.sprites_sem_limite = 1;
+	cfg.ordem_botao = 1;
 	config_controles_padrao(0);
 	config_controles_padrao(1);
 }
@@ -121,7 +122,7 @@ int config_salvar(const char *arq)
 	fprintf(f, "volume=%d\nmudo=%d\npausa_sem_foco=%d\ninicio_rapido=%d\ndica_treino=%d\ncenario=%d\n",
 		cfg.volume, cfg.mudo, cfg.pausa_sem_foco, cfg.inicio_rapido, cfg.dica_treino, cfg.cenario);
 	fprintf(f, "musica_arquivos=%d\nefeitos_arquivos=%d\n", cfg.musica_arquivos, cfg.efeitos_arquivos);
-	fprintf(f, "run_ahead=%d\nritmo_monitor=%d\nsprites_sem_limite=%d\n", cfg.run_ahead, cfg.ritmo_monitor, cfg.sprites_sem_limite);
+	fprintf(f, "run_ahead=%d\nritmo_monitor=%d\nsprites_sem_limite=%d\nordem_botao=%d\n", cfg.run_ahead, cfg.ritmo_monitor, cfg.sprites_sem_limite, cfg.ordem_botao);
 	for (int j = 0; j < 2; j++)
 		for (int a = 0; a < NACOES; a++) {
 			fprintf(f, "p%d.%s=", j + 1, CHAVE_ACAO[a]);
@@ -166,6 +167,7 @@ int config_carregar(const char *arq)
 		else if (!strcmp(linha, "run_ahead")) cfg.run_ahead = n < 0 ? 0 : n > 2 ? 2 : n;
 		else if (!strcmp(linha, "ritmo_monitor")) cfg.ritmo_monitor = n;
 		else if (!strcmp(linha, "sprites_sem_limite")) cfg.sprites_sem_limite = n;
+		else if (!strcmp(linha, "ordem_botao")) cfg.ordem_botao = n;
 		else if (linha[0] == 'p' && (linha[1] == '1' || linha[1] == '2') && linha[2] == '.') {
 			int j = linha[1] - '1';
 			for (int a = 0; a < NACOES; a++) {

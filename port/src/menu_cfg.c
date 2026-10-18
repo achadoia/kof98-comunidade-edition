@@ -28,7 +28,7 @@ static int linhas_aba(void)
 	case 0: return 8;
 	case 1: return 3 + NACOES;     // jogador, assistente, ações..., restaurar
 	case 2: return 5;
-	default: return 5;
+	default: return 6;
 	}
 }
 
@@ -74,6 +74,7 @@ static void muda(int d)
 		case 2: cfg.inicio_rapido = !cfg.inicio_rapido; break;
 		case 3: cfg.dica_treino = !cfg.dica_treino; break;
 		case 4: cfg.run_ahead = (cfg.run_ahead + d + 3) % 3; break;
+		case 5: cfg.ordem_botao = !cfg.ordem_botao; break;
 		}
 	}
 	salva();
@@ -279,11 +280,12 @@ void menu_cfg_desenha(u32 tela[NEO_H][NEO_W])
 		item(y, 3, "Dica do F6 ao iniciar", liga(cfg.dica_treino), UI_CINZA); y += 14;
 		snprintf(v, sizeof v, cfg.run_ahead ? "%d quadro%s" : "desligado", cfg.run_ahead, cfg.run_ahead > 1 ? "s" : "");
 		item(y, 4, "Run-ahead (resposta mais rápida)", v, UI_CINZA); y += 14;
-		ui_texto(20, y + 4, "Run-ahead emula quadros à frente e volta:", UI_APAGADO);
-		ui_texto(20, y + 14, "tira 1 ou 2 quadros do atraso interno do", UI_APAGADO);
-		ui_texto(20, y + 24, "jogo. 2 só se o PC aguentar (veja o FPS).", UI_APAGADO);
-		ui_texto(20, y + 38, "Cenário vale pra próxima luta. CPU do", UI_APAGADO);
-		ui_texto(20, y + 48, "Neo Geo fixa em 200% (sem lentidão).", UI_APAGADO);
+		item(y, 5, "Ordem do trio por botão (A/B/C)", liga(cfg.ordem_botao), UI_CINZA); y += 14;
+		ui_texto(20, y + 4, "Run-ahead: emula à frente e volta; tira", UI_APAGADO);
+		ui_texto(20, y + 14, "1-2 quadros do atraso interno do jogo.", UI_APAGADO);
+		ui_texto(20, y + 26, "Ordem por botão: no ORDER SELECT, A/B/C", UI_APAGADO);
+		ui_texto(20, y + 36, "= 1º/2º/3º escolhido começa; o adversário", UI_APAGADO);
+		ui_texto(20, y + 46, "não vê. <> muda ADV/EXTRA/SPECIAL, A ok.", UI_APAGADO);
 		break;
 	}
 
