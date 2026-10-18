@@ -55,6 +55,12 @@ Quer entrar no jogo também, ou tem ideia de personagem, golpe ou modo? Chama no
 - **Chizuru** enche a barra 30% mais devagar.
 - **Modo EXTRA**: o pouso do pulinho ganhou +6 quadros (contra o laço infinito no canto).
 
+### Mais fluido que o fliperama (v1.1.0)
+- **Run-ahead**: o EXE emula 1 quadro à frente e volta (F1 → Melhorias, até 2): o golpe sai 1-2 quadros antes do que no Neo Geo.
+- **Ritmo do monitor**: o jogo roda a 60 Hz casado com o vsync (sem o engasgo de 59,19 Hz na tela de 60; 120 Hz também).
+- **Sprites sem limite**: nada some em cena cheia (o hardware cortava em 96 por linha).
+- Menu Comunidade Edition com som e **no lugar do MODE SELECT original sempre** (Start no título, saída do OPTION, fim de jogo).
+
 ### Por vir
 - Netplay grátis pra jogar com os streamers.
 - Modo COOP.

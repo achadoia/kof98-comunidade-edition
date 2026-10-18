@@ -25,10 +25,10 @@ static const char *liga(int v) { return v ? "ligado" : "desligado"; }
 static int linhas_aba(void)
 {
 	switch (aba) {
-	case 0: return 6;
+	case 0: return 8;
 	case 1: return 3 + NACOES;     // jogador, assistente, ações..., restaurar
 	case 2: return 5;
-	default: return 4;
+	default: return 5;
 	}
 }
 
@@ -47,6 +47,8 @@ static void muda(int d)
 		case 3: cfg.tela_cheia = !cfg.tela_cheia; break;
 		case 4: cfg.vsync = !cfg.vsync; break;
 		case 5: cfg.mostra_fps = !cfg.mostra_fps; break;
+		case 6: cfg.ritmo_monitor = !cfg.ritmo_monitor; break;
+		case 7: cfg.sprites_sem_limite = !cfg.sprites_sem_limite; break;
 		}
 		break;
 	case 1:
@@ -71,6 +73,7 @@ static void muda(int d)
 		case 1: cfg.pausa_sem_foco = !cfg.pausa_sem_foco; break;
 		case 2: cfg.inicio_rapido = !cfg.inicio_rapido; break;
 		case 3: cfg.dica_treino = !cfg.dica_treino; break;
+		case 4: cfg.run_ahead = (cfg.run_ahead + d + 3) % 3; break;
 		}
 	}
 	salva();
@@ -208,7 +211,16 @@ void menu_cfg_desenha(u32 tela[NEO_H][NEO_W])
 		item(y, 3, "Tela cheia  (F11)", liga(cfg.tela_cheia), UI_CINZA); y += 14;
 		item(y, 4, "Sincronia vertical (vsync)", liga(cfg.vsync), UI_CINZA); y += 14;
 		item(y, 5, "Mostrar FPS", liga(cfg.mostra_fps), UI_CINZA); y += 14;
-		ui_texto(20, y + 10, "F4 troca o filtro durante o jogo.", UI_APAGADO);
+		{ extern int ritmo_monitor_ativo; extern double ritmo_monitor_hz;
+		  if (!cfg.ritmo_monitor) snprintf(v, sizeof v, "desligado (59,19 Hz)");
+		  else if (ritmo_monitor_ativo) snprintf(v, sizeof v, "%.0f Hz do monitor", ritmo_monitor_hz);
+		  else snprintf(v, sizeof v, "ligado (monitor incompatível)"); }
+		item(y, 6, "Ritmo do monitor", v, UI_CINZA); y += 14;
+		item(y, 7, "Sprites sem limite por linha", liga(cfg.sprites_sem_limite), UI_CINZA); y += 14;
+		ui_texto(20, y + 6, "F4 troca o filtro durante o jogo.", UI_APAGADO);
+		ui_texto(20, y + 18, "Ritmo do monitor: o jogo roda a 60 Hz", UI_APAGADO);
+		ui_texto(20, y + 28, "(1,4% mais rápido) casado com o vsync,", UI_APAGADO);
+		ui_texto(20, y + 38, "sem o engasgo de 59,19 Hz na tela de 60.", UI_APAGADO);
 		break;
 	case 1: {
 		snprintf(v, sizeof v, "jogador %d  (%d ctrl)", jogador + 1, entrada_num_controles());
@@ -265,10 +277,13 @@ void menu_cfg_desenha(u32 tela[NEO_H][NEO_W])
 		item(y, 1, "Pausar sem foco", liga(cfg.pausa_sem_foco), UI_CINZA); y += 14;
 		item(y, 2, "Início rápido (pula o logo)", liga(cfg.inicio_rapido), UI_CINZA); y += 14;
 		item(y, 3, "Dica do F6 ao iniciar", liga(cfg.dica_treino), UI_CINZA); y += 14;
-		ui_texto(20, y + 6, "O cenário vale pra próxima luta, em", UI_APAGADO);
-		ui_texto(20, y + 16, "qualquer modo (luta, versus, prática).", UI_APAGADO);
-		ui_texto(20, y + 32, "CPU do Neo Geo fixa em 200%:", UI_APAGADO);
-		ui_texto(20, y + 42, "sem a lentidão do original.", UI_APAGADO);
+		snprintf(v, sizeof v, cfg.run_ahead ? "%d quadro%s" : "desligado", cfg.run_ahead, cfg.run_ahead > 1 ? "s" : "");
+		item(y, 4, "Run-ahead (resposta mais rápida)", v, UI_CINZA); y += 14;
+		ui_texto(20, y + 4, "Run-ahead emula quadros à frente e volta:", UI_APAGADO);
+		ui_texto(20, y + 14, "tira 1 ou 2 quadros do atraso interno do", UI_APAGADO);
+		ui_texto(20, y + 24, "jogo. 2 só se o PC aguentar (veja o FPS).", UI_APAGADO);
+		ui_texto(20, y + 38, "Cenário vale pra próxima luta. CPU do", UI_APAGADO);
+		ui_texto(20, y + 48, "Neo Geo fixa em 200% (sem lentidão).", UI_APAGADO);
 		break;
 	}
 

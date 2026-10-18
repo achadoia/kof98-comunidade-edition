@@ -143,7 +143,6 @@ void video_reset(void)
 }
 
 // ---------------------------------------------------------------- sprites
-#define MAX_SPRITES_TELA 381
 #define MAX_SPRITES_LINHA 96
 int video_limite_linha = MAX_SPRITES_LINHA;   // 96 = hardware; MAX_SPRITES_TELA = sem limite (sem sprites sumindo)
 static u16 listas[2][MAX_SPRITES_TELA + 2];   // lista de sprites de cada linha (par/ímpar)
@@ -291,7 +290,8 @@ static void desenha_sprites(int linha, const u32 *pens)
 		const u32 *tr = troca_busca(code);
 		int px = x;
 #ifdef KOF_TESTE
-		if (getenv("KOF_SPR") && linha == atoi(getenv("KOF_SPR")) && neo_quadros + 1 >= (u32)atoi(getenv("KOF_SPR_Q"))) {
+		static int spr_l = -2, spr_q; if (spr_l == -2) { spr_l = getenv("KOF_SPR") ? atoi(getenv("KOF_SPR")) : -1; spr_q = getenv("KOF_SPR_Q") ? atoi(getenv("KOF_SPR_Q")) : 0; }
+		if (spr_l >= 0 && linha == spr_l && neo_quadros + 1 >= (u32)spr_q) {
 			int larg = 0; for (u16 t = zx; t; t = (u16)(t << 1)) if (t & 0x8000) larg++;
 			if (getenv("KOF_SPR_TUDO") || ((40 - x) & 0x1ff) < 16 || ((48 - x) & 0x1ff) < 16)
 				fprintf(stderr, "spr %3d x=%3d larg=%2d zx=%x zy=%02x linhas=%02x code=%05x attr=%04x yc=%04x pal=%02x\n", s, x, larg, zoom_x, zoom_y, linhas, code, attr, yc, attr >> 8);

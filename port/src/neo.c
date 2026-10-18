@@ -127,7 +127,8 @@ static void escreve(u32 a, u16 d, u16 mask)
 #endif
 	switch (a >> 20) {
 	case 0x1: {
-		if (getenv("KOF_DEBUG_FD82") && (a & 0xfffe) == 0xfd82)
+		static int dbg_fd82 = -1; if (dbg_fd82 < 0) dbg_fd82 = getenv("KOF_DEBUG_FD82") != NULL;
+		if (dbg_fd82 && (a & 0xfffe) == 0xfd82)
 			fprintf(stderr, "10fd82 <- %04x mask %04x pc=%06x quadro=%u\n", d, mask, m68k_get_reg(NULL, M68K_REG_PPC), neo_quadros);
 		u8 *p = ram + (a & 0xfffe);
 		if (mask & 0xff00) p[0] = (u8)(d >> 8);

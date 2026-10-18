@@ -10,4 +10,5 @@ void frontend_abre(void);                  // reinicia o jogo e mostra o menu
 void frontend_controles(int *rodando);     // lê teclado/controle e navega
 int frontend_passos(void);                 // quadros do jogo a rodar neste giro (avanço rápido ao escolher)
 int frontend_piloto(void);                 // 1 = o piloto definiu as entradas deste quadro
+void frontend_vigia(void);                 // abre o menu por cima sempre que o MODE SELECT original aparece
 void frontend_desenha(SDL_Renderer *ren);

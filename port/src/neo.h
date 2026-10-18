@@ -82,6 +82,7 @@ void video_vsync(void);               // contador de animação automática
 extern int video_shadow, video_banco_paleta, video_fix_cart;
 extern u8 video_anim_contador;
 extern int video_limite_linha;        // sprites por linha (96 = hardware)
+#define MAX_SPRITES_TELA 381
 // interrupção de posição (IRQ2 / raster)
 extern u32 video_irq2_ctrl;
 extern s32 video_irq2_ciclos;         // ciclos 68k até disparar (-1 = parado)
@@ -111,6 +112,13 @@ void video_estado(Estado *e);
 void audio_estado(Estado *e);
 int estado_salvar(const char *arq);    // 0 = ok
 int estado_carregar(const char *arq);
+extern int estado_versao_lida;          // versão do arquivo sendo carregado
+extern int estado_leve;                 // 1 = sem a trilha trocável (run-ahead: salva/restaura a cada quadro)
+void estado_mem_salvar(void);           // snapshot na memória (run-ahead)
+void estado_mem_carregar(void);
+void audio_descarta(void);              // joga fora as amostras do chip ainda não lidas (quadros de run-ahead)
+void audio_fator_ritmo(double f);       // >1 = jogo rodando mais rápido que 59,19 Hz (ritmo do monitor)
+
 
 #ifdef __cplusplus
 }

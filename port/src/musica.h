@@ -15,6 +15,8 @@ int musica_tocando(void);                // código tocando por arquivo (-1 = ne
 const char *musica_arquivo(int cod);
 void musica_reset(void);
 void musica_estado(Estado *e);
+void musica_fila_estado(Estado *e);      // só prefixo/fila pro Z80 (run-ahead)
+extern int musica_silenciosa;            // 1 = quadro de run-ahead: nada toca por arquivo, o Z80 recebe o mesmo
 #ifdef __cplusplus
 }
 #endif

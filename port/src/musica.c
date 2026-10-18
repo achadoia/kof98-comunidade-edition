@@ -43,6 +43,7 @@ typedef struct {
 static Faixa F = {.cod = -1};
 
 int musica_ligada = 1;
+int musica_silenciosa;
 int musica_ultima_cod = -1;           // última música pedida pelo jogo (pra mostrar no F1)
 static int param_resta;              // bytes de parâmetro que ainda vêm (não são comandos)
 
@@ -216,13 +217,13 @@ void musica_comando(u8 cmd)
 	if (prefixo >= 0) {                  // parâmetro de voz/efeito: código = (prefixo & 0xf) << 8 | parâmetro
 		int p = prefixo, cod = (p & 0xf) << 8 | cmd;
 		prefixo = -1;
-		if (efeitos_ligados && efeitos_tem(cod)) { efeitos_toca(p - 0x16, cod); return; }
+		if (efeitos_ligados && efeitos_tem(cod)) { if (!musica_silenciosa) efeitos_toca(p - 0x16, cod); return; }
 		poe((u8)p); poe(cmd);
 		return;
 	}
 	if (para_n) {                       // os passos da corrida (1D 11) duram 72 s no UM: só param com isto
 		if (para_n == 2) para_p = cmd;
-		else efeitos_para((para_p & 0xf) << 8 | cmd);
+		else if (!musica_silenciosa) efeitos_para((para_p & 0xf) << 8 | cmd);
 		para_n--;
 		poe(cmd);
 		return;
@@ -233,13 +234,17 @@ void musica_comando(u8 cmd)
 		prefixo = cmd; return;
 	case 0x05: case 0x0e: case 0x15: param_resta = 1; poe(cmd); return;
 	case 0x14: para_n = 2; poe(cmd); return;
-	case 0x0a: param_resta = 1; fade(1.5); poe(cmd); return;
-	case 0x02: fade(6.0); poe(cmd); return;
-	case 0x01: case 0x03: case 0x04: case 0x0d: efeitos_para_tudo(); /* fallthrough */
-	case 0x20: fecha(); musica_ultima_cod = -1; poe(cmd); return;
+	case 0x0a: param_resta = 1; if (!musica_silenciosa) fade(1.5); poe(cmd); return;
+	case 0x02: if (!musica_silenciosa) fade(6.0); poe(cmd); return;
+	case 0x01: case 0x03: case 0x04: case 0x0d: if (!musica_silenciosa) efeitos_para_tudo(); /* fallthrough */
+	case 0x20: if (!musica_silenciosa) { fecha(); musica_ultima_cod = -1; } poe(cmd); return;
 	}
 	if (cmd >= 0x21 && cmd <= 0x56) {
 		int c = cmd == 0x4b ? 0x21 : cmd;
+		if (musica_silenciosa) {         // run-ahead: o Z80 recebe o mesmo que receberia, o arquivo não muda
+			if (musica_ligada && arquivo[c]) { poe(0x20); return; }
+			poe(cmd); return;
+		}
 		musica_ultima_cod = c;
 		if (musica_ligada && arquivo[c] && abre(c)) {
 			F.frac = 1.0;
@@ -248,7 +253,7 @@ void musica_comando(u8 cmd)
 		}
 		fecha();
 	} else if (cmd > 0x56 && efeitos_ligados && efeitos_tem(cmd)) {   // efeito de 1 byte
-		efeitos_toca(-1, cmd);
+		if (!musica_silenciosa) efeitos_toca(-1, cmd);
 		return;
 	}
 	poe(cmd);
@@ -265,18 +270,27 @@ void musica_reset(void)
 	musica_ultima_cod = -1;
 }
 
+// run-ahead: só o que vai pro Z80 (prefixo pendente, parâmetros, fila, "pare o som"); o arquivo de música e as
+// vozes por arquivo são tempo real e continuam de onde estão.
+void musica_fila_estado(Estado *e)
+{
+	EST(e, param_resta); EST(e, prefixo); EST(e, fila_n); EST(e, fila_ini); EST(e, fila); EST(e, para_n); EST(e, para_p);
+}
+
 // savestate: música (código, posição, fade) + fila/prefixo. Bloco opcional no fim: estados antigos carregam sem ele.
 void musica_estado(Estado *e)
 {
-	s32 cod = F.cod, pr = param_resta, pf = prefixo, fn = fila_n, fi = fila_ini;
+	s32 cod = F.cod, pr = param_resta, pf = prefixo, fn = fila_n, fi = fila_ini, pn = para_n, pp = para_p;
 	uint64_t pos = F.pos;
 	float ganho = F.ganho, fp = F.fade_passo;
-	size_t tam = sizeof cod * 5 + sizeof pos + sizeof ganho * 2 + sizeof fila;
+	size_t tam = sizeof cod * 7 + sizeof pos + sizeof ganho * 2 + sizeof fila;
 	if (!e->salvar && e->pos + tam > e->cap) { musica_reset(); return; }
-	EST(e, cod); EST(e, pr); EST(e, pf); EST(e, fn); EST(e, fi); EST(e, pos); EST(e, ganho); EST(e, fp); EST(e, fila);
+	EST(e, cod); EST(e, pr); EST(e, pf); EST(e, fn); EST(e, fi);
+	if (estado_versao_lida >= 3) { EST(e, pn); EST(e, pp); } else pn = pp = 0;
+	EST(e, pos); EST(e, ganho); EST(e, fp); EST(e, fila);
 	if (e->salvar) return;
 	efeitos_para_tudo();
-	param_resta = pr; prefixo = pf; fila_n = fn; fila_ini = fi;
+	param_resta = pr; prefixo = pf; fila_n = fn; fila_ini = fi; para_n = pn; para_p = pp;
 	if (cod < 0 || !arquivo[cod] || !abre(cod)) { fecha(); return; }
 	busca(pos < F.total ? pos : 0);
 	F.frac = 1.0;

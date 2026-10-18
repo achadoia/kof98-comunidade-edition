@@ -5,7 +5,9 @@
 #include <string.h>
 
 #define ESTADO_MAGICO 0x4b4f4639u   // "KOF9"
-#define ESTADO_VERSAO 2
+#define ESTADO_VERSAO 3
+int estado_leve;
+int estado_versao_lida = ESTADO_VERSAO;   // 2 = arquivo antigo (sem para_n/para_p na música)
 
 void est_bloco(Estado *e, void *p, size_t n)
 {
@@ -28,10 +30,26 @@ static void tudo(Estado *e)
 {
 	u32 magico = ESTADO_MAGICO, versao = ESTADO_VERSAO;
 	EST(e, magico); EST(e, versao);
-	if (!e->salvar && (magico != ESTADO_MAGICO || versao != ESTADO_VERSAO)) { e->erro = 1; return; }
+	if (!e->salvar && (magico != ESTADO_MAGICO || versao < 2 || versao > ESTADO_VERSAO)) { e->erro = 1; return; }
+	estado_versao_lida = e->salvar ? ESTADO_VERSAO : (int)versao;
 	neo_estado(e);
 	video_estado(e);
 	audio_estado(e);
+}
+
+// run-ahead: snapshot na memória, sem arquivo. O buffer fica alocado entre quadros.
+static Estado mem;
+void estado_mem_salvar(void)
+{
+	mem.pos = 0; mem.salvar = 1; mem.erro = 0;
+	tudo(&mem);
+}
+void estado_mem_carregar(void)
+{
+	size_t cap = mem.cap, tam = mem.pos;
+	mem.cap = tam; mem.pos = 0; mem.salvar = 0; mem.erro = 0;
+	tudo(&mem);
+	mem.cap = cap;
 }
 
 int estado_salvar(const char *arq)

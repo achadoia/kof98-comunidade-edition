@@ -10,12 +10,18 @@
 extern char font8x8_basic[128][8];   // definida em ui.c (font8x8_basic.h)
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define AW 1672
 #define AH 941
 #define Q_START 700           // Start na tela de título
 #define Q_MENU 960            // MODE SELECT já aceita o direcional
 #define PASSO 16              // quadros entre um toque e outro no MODE SELECT
+// RAM do Anniversary (achado 18/10 por diff de dumps): tela atual, cursor do MODE SELECT, modo confirmado, OPTION
+#define RAM_TELA 0x10A790     // 0 título, 1 MODE SELECT (e OPTION), 2 jogo
+#define RAM_CURSOR 0x1085D2   // 0-6 = item do MODE SELECT
+#define RAM_FASE 0x10A789     // 00 parado no MODE SELECT; 0x80 ao confirmar um modo (e dentro do OPTION); 03/83 no título
+#define RAM_OPTION 0x10051C   // 1 dentro do OPTION
 
 int frontend_ativo;
 static SDL_Texture *tex;
@@ -34,7 +40,9 @@ static const int LINHA_Y[5] = {200, 272, 345, 420, 493};   // centro de cada lin
 
 // piloto: 0 desligado, 1 indo pro MODE SELECT, 2 escolhendo, 3 assistindo (sem Start)
 static int piloto, alvo;
-static u32 q_rel, q_escolha;     // quadros desde que o menu abriu (neo_reset não zera neo_quadros)
+static int cursor_ini;        // item onde o cursor do MODE SELECT estava ao escolher (voltando do OPTION fica no 6)
+static int vigia_n;           // quadros seguidos com o MODE SELECT original na tela
+static u32 q_rel, q_escolha, q_som;   // quadros desde que o menu abriu (neo_reset não zera neo_quadros); q_som = confirmação
 
 #ifdef KOF_SOLO
 #include "stb_image.h"
@@ -167,8 +175,12 @@ static void escolhe(int *rodando)
 	if (it->modo == -2) { *rodando = 0; return; }
 	if (it->modo == -1) { neo_reset(); piloto = 3; frontend_ativo = 0; return; }
 	alvo = it->modo;
+	cursor_ini = (int)m68k_read_memory_8(RAM_CURSOR);
+	if (cursor_ini < 0 || cursor_ini > 6 || m68k_read_memory_8(RAM_TELA) != 1) cursor_ini = 0;
 	piloto = 2;
 	q_escolha = 0;
+	q_som = q_rel;
+	audio_comando(0x71);               // som de confirmação do próprio MODE SELECT
 	sujo = 1;
 }
 
@@ -201,12 +213,28 @@ void frontend_controles(int *rodando)
 	if (novo[0]) s = mover(-1, 0);
 	if (novo[1]) s = mover(1, 0);
 	if (novo[2] || novo[3]) s = mover(0, 1);
-	if (s != sel) { sel = s; sujo = 1; }
+	if (s != sel) { sel = s; sujo = 1; audio_comando(0x70); }   // som de cursor do próprio MODE SELECT
 	if (novo[4]) escolhe(rodando);
 }
 
 int frontend_tem_arte(void) { return fundo != NULL; }
-int frontend_passos(void) { return piloto == 2 ? 12 : 1; }
+
+// O MODE SELECT original nunca fica na tela: sempre que o jogo chega nele por conta própria (Start no título,
+// volta do OPTION, fim de jogo), o nosso menu abre por cima, sem reset, já pronto pra escolher.
+void frontend_vigia(void)
+{
+	if (!fundo || frontend_ativo || piloto) { vigia_n = 0; return; }
+	int ms = m68k_read_memory_8(RAM_TELA) == 1 && !m68k_read_memory_8(RAM_FASE) && !m68k_read_memory_8(RAM_OPTION);
+	if (!ms) { vigia_n = 0; return; }
+	if (++vigia_n < 6) return;
+	vigia_n = 0;
+	frontend_ativo = 1;
+	piloto = 1;
+	q_rel = Q_MENU;              // já está no MODE SELECT: nada de Start
+	sujo = 1;
+	memset(antes, 1, sizeof antes);
+}
+int frontend_passos(void) { return piloto == 2 && q_rel - q_som >= 30 ? 12 : 1; }   // 30 quadros normais: o som de confirmar toca inteiro
 
 int frontend_piloto(void)
 {
@@ -219,8 +247,10 @@ int frontend_piloto(void)
 		if (q < Q_MENU) return 1;
 		if (!q_escolha) q_escolha = q;
 		u32 r = q - q_escolha;
-		for (int i = 0; i < alvo; i++) if (r >= (u32)(i * PASSO) && r < (u32)(i * PASSO + 4)) neo_in_p1 &= (u8)~2;   // baixo
-		u32 qa = (u32)(alvo * PASSO + 8);
+		int toques = alvo - cursor_ini, bit = 2;                 // baixo; voltando do OPTION o cursor está no 6: sobe
+		if (toques < 0) { toques = -toques; bit = 1; }
+		for (int i = 0; i < toques; i++) if (r >= (u32)(i * PASSO) && r < (u32)(i * PASSO + 4)) neo_in_p1 &= (u8)bit;
+		u32 qa = (u32)(toques * PASSO + 8);
 		if (r >= qa && r < qa + 5) neo_in_p1 &= (u8)~0x10;                                                           // A
 		if (r >= qa + 30) { piloto = 0; frontend_ativo = 0; }
 	}
@@ -246,4 +276,6 @@ void frontend_desenha(SDL_Renderer *ren)
 
 #ifdef KOF_TESTE
 void frontend_escolhe_teste(int item) { sel = item; int r = 1; escolhe(&r); }
+void frontend_teste_zera(void) { frontend_ativo = 0; piloto = 0; }
+void frontend_teste_arte(void) { if (!fundo) fundo = calloc(AW * AH, 4); if (!tela) tela = calloc(AW * AH, 4); }
 #endif

@@ -30,12 +30,27 @@ Salvas em `kof98.ini` ao lado do EXE. Abas (Tab, ou LB/RB no controle):
   "Configurar tudo" pede uma por uma; a ação acende em verde quando apertada (teste ao vivo);
   até 3 ligações por ação (teclado + controle); restaurar padrão.
 - **Som**: volume, mudo.
-- **Melhorias**: pausar sem foco, início rápido (pula o logo), dica do F6.
+- **Melhorias**: pausar sem foco, início rápido (pula o logo), dica do F6, **run-ahead** (0-2 quadros).
+- **Fluidez além do original (18/10)**: `run_ahead` emula N quadros à frente com a entrada atual, mostra o último e
+  volta ao estado real por snapshot em memória (`estado_mem_salvar/carregar`, `estado_leve` = sem a trilha trocável,
+  `musica_silenciosa` = os quadros à frente não disparam arquivo nenhum e mandam o mesmo pro Z80); o som sai do
+  quadro real. Teste: `KOF_RUNAHEAD=N` no modo sem janela tem que dar `--salvar-estado` idêntico ao sem run-ahead.
+  `ritmo_monitor`: o jogo roda na taxa do monitor (60, 120 = 2 apresentações por quadro) com vsync e o YM é
+  reamostrado 1,4% acima (`audio_fator_ritmo`); a fila de som só corrige a deriva (quadro a mais/a menos, ±1,5%).
+  Monitor sem múltiplo de 59,19 Hz (144) = opção fica "incompatível" e vale o ritmo original.
+  `sprites_sem_limite`: `video_limite_linha` = 381 em vez dos 96 do hardware (nada some em cena cheia).
 
 Abre em **modo console (AES)**: MODE SELECT do jogo de casa (Team Play, Team VS, Single, Survivor,
 Practice, Option). `--arcade` volta ao modo fliperama (MVS, com fichas).
 
 ### Menu inicial "Ultimate Match - Comunidade Edition" (`src/frontend.c`)
+**O MODE SELECT original nunca fica na tela** (18/10): `frontend_vigia()` lê a RAM todo quadro e, quando o jogo
+chega sozinho no MODE SELECT (Start no título, volta do OPTION, fim de jogo), abre o nosso menu por cima sem reset,
+já no estado "pronto pra escolher" (`q_rel = Q_MENU`). Bytes do Anniversary achados por diff de dumps: `$10A790` tela
+(0 título, 1 MODE SELECT/OPTION, 2 jogo), `$10A789` 00 parado no MODE SELECT / 0x80 ao confirmar e no OPTION / 03-83 no
+título, `$10051C` 1 dentro do OPTION, `$1085D2` cursor do MODE SELECT (0-6; o piloto sobe ou desce a partir dele, então
+voltando do OPTION também funciona). Teste: `KOF_VIGIA_TESTE=1` sem janela imprime os quadros em que abriria.
+Sons do menu: cursor = comando 70 e confirmar = 71 do próprio MODE SELECT (o avanço rápido espera 30 quadros pra o som sair).
 Arte 1672x941 em `arte/menu_fundo.png` (gerada no ChatGPT pelo usuário; o build converte pra `bin/arte/menu_fundo.bmp`).
 O jogo roda por trás: um piloto aperta Start no título (quadro 700 após o reset) e espera no MODE SELECT (pronto no 960;
 não volta sozinho pro título). Ao escolher, desce até o item e aperta A em avanço rápido (12 quadros por giro, som

@@ -60,7 +60,7 @@ static double amostras_por_linha;
 // Aqui: passa-baixa Butterworth de 4ª ordem (2 biquads) e reamostragem própria pra AUDIO_TAXA.
 struct Biquad { double b0, b1, b2, a1, a2, z1[2], z2[2]; };
 static Biquad lp[2];
-static double rs_ant[2], rs_fase, rs_passo, corte_hz = 12000.0;
+static double rs_ant[2], rs_fase, rs_passo, corte_hz = 12000.0, fator_ritmo = 1.0, fs_ym;
 
 static void prepara_filtro(double fs, double corte)
 {
@@ -74,8 +74,17 @@ static void prepara_filtro(double fs, double corte)
 	}
 	rs_ant[0] = rs_ant[1] = 0;
 	rs_fase = 0;
-	rs_passo = fs / AUDIO_TAXA;
+	rs_passo = fs / AUDIO_TAXA * fator_ritmo;
+	fs_ym = fs;
 }
+
+extern "C" void audio_fator_ritmo(double f)
+{
+	fator_ritmo = f;
+	if (fs_ym > 0) rs_passo = fs_ym / AUDIO_TAXA * fator_ritmo;
+}
+
+extern "C" void audio_descarta(void) { saida_ini = saida_fim; }
 
 static double filtra(int ch, double x)
 {
@@ -146,8 +155,9 @@ static u8 z_in(z80 *z, u8 p)
 		return 0;
 	}
 	default:
-		if (getenv("KOF_DEBUG_Z80")) fprintf(stderr, "z80 IN porta %02x (pc %04x)\n", p, z->pc);
-		return 0;
+		{ static int dbg_z80 = -1; if (dbg_z80 < 0) dbg_z80 = getenv("KOF_DEBUG_Z80") != nullptr;
+		if (dbg_z80) fprintf(stderr, "z80 IN porta %02x (pc %04x)\n", p, z->pc);
+		return 0; }
 	}
 }
 
@@ -166,7 +176,8 @@ static void z_out(z80 *, u8 p, u8 d)
 			if (lg && (p & 1)) { u32 rec[2] = {saida_fim, (u32)((p & 2) << 15 | ((p & 2) ? ym_end_alto & 0xff : end_a) << 8 | d)}; fwrite(rec, 4, 2, lg); }
 		}
 #endif
-		if ((p & 3) == 3 && getenv("KOF_DEBUG_ADPCM")) {
+		static int dbg_adpcm = -1; if (dbg_adpcm < 0) dbg_adpcm = getenv("KOF_DEBUG_ADPCM") != nullptr;
+		if ((p & 3) == 3 && dbg_adpcm) {
 			ym_regs[ym_end_alto & 0xff] = d;
 			int r = ym_end_alto & 0xff;
 			if (r >= 0x18 && r <= 0x1d) {          // byte alto do início do canal ADPCM-A
@@ -179,7 +190,7 @@ static void z_out(z80 *, u8 p, u8 d)
 	case 0x08: nmi_ligado = 1; dispara_nmi(); break;
 	case 0x18: nmi_ligado = 0; break;
 	case 0x0c: case 0x1c: latch_resp = d; break;
-	default: if (getenv("KOF_DEBUG_Z80")) fprintf(stderr, "z80 OUT porta %02x = %02x\n", p, d); break;
+	default: { static int dbg_z80o = -1; if (dbg_z80o < 0) dbg_z80o = getenv("KOF_DEBUG_Z80") != nullptr; if (dbg_z80o) fprintf(stderr, "z80 OUT porta %02x = %02x\n", p, d); break; }
 	}
 }
 
@@ -312,12 +323,15 @@ extern "C" void audio_estado(Estado *e)
 	EST(e, zram); EST(e, usa_cart); EST(e, banco); EST(e, latch_cmd); EST(e, latch_resp);
 	EST(e, cmd_pendente); EST(e, nmi_ligado); EST(e, ciclos_sobra); EST(e, intf.timer); EST(e, intf.irq);
 	EST(e, frac_amostra);
+	if (estado_versao_lida >= 3) { EST(e, lp); EST(e, rs_ant); EST(e, rs_fase); }   // filtro/reamostragem: run-ahead volta sem desvio de 1 amostra
 	std::vector<uint8_t> v;
 	u32 n = 0;
 	if (e->salvar) { ymfm::ymfm_saved_state st(v, true); ym->save_restore(st); n = (u32)v.size(); }
 	EST(e, n);
+	if (e->erro) return;                     // arquivo curto/corrompido: não tenta alocar n bytes de lixo
 	if (!e->salvar) v.resize(n);
 	est_bloco(e, v.data(), n);
 	if (!e->salvar) { ymfm::ymfm_saved_state st(v, false); ym->save_restore(st); }
-	musica_estado(e);    // por último: estados salvos antes da trilha trocável não têm esse bloco
+	if (estado_leve) musica_fila_estado(e);   // run-ahead: só a fila pro Z80 (o arquivo de música continua tocando)
+	else musica_estado(e);    // por último: estados salvos antes da trilha trocável não têm esse bloco
 }

@@ -18,6 +18,9 @@ typedef struct {
 	int efeitos_arquivos;        // 1 = toca som/efeitos/<código>.wav no lugar das vozes/efeitos do chip
 	int cpu, pausa_sem_foco, inicio_rapido, dica_treino;
 	int cenario;                 // -1 = o jogo escolhe; 0..NCENARIOS-1 = fixo
+	int run_ahead;               // 0-2 quadros emulados à frente (menos atraso de resposta que o Neo Geo)
+	int ritmo_monitor;           // 1 = roda a 60 Hz (ou múltiplo) com vsync: sem engasgo de 59,19 vs 60
+	int sprites_sem_limite;      // 1 = ignora o limite de 96 sprites por linha (nada some em cena cheia)
 	Ligacao lig[2][NACOES][NLIG];
 } Config;
 

@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
+#include <math.h>
 #ifdef KOF_SOLO
 #include "stb_image.h"
 #endif
@@ -63,6 +64,42 @@ static void salva_bmp(const char *nome)
 }
 
 static int existe(const char *p) { FILE *f = fopen(p, "rb"); if (f) fclose(f); return f != NULL; }
+
+// ---------------------------------------------------------------- run-ahead
+// Emula N quadros à frente com a entrada atual, mostra o último e volta ao estado real: a imagem fica 1-2
+// quadros adiantada em relação ao atraso interno do jogo. O som sai do quadro real (já lido antes de chamar).
+static void run_ahead(int n)
+{
+	estado_leve = 1; musica_silenciosa = 1;
+	estado_mem_salvar();
+	for (int k = 0; k < n; k++) { config_aplica_cenario(); neo_frame(); treino_depois_quadro(); }
+	estado_mem_carregar();
+	audio_descarta();
+	musica_silenciosa = 0; estado_leve = 0;
+}
+
+// ---------------------------------------------------------------- ritmo do monitor
+// 59,19 Hz numa tela de 60 Hz = um quadro repetido a cada ~70: o scroll engasga. Com a opção ligada o jogo
+// roda na taxa do monitor (60, 120 = 2 apresentações por quadro...) com vsync, e o som é reamostrado 1,4% acima.
+int ritmo_monitor_ativo;
+double ritmo_monitor_hz;
+static int ritmo_n = 1, ritmo_falhou;   // falhou = o vsync não segurou a taxa nesta sessão: volta ao ritmo pelo som
+static double ritmo_fator = 1.0;
+static Uint32 ritmo_aviso_ate;
+static void ritmo_calcula(SDL_Window *win, int tem_som)
+{
+	SDL_DisplayMode m;
+	int idx = SDL_GetWindowDisplayIndex(win);
+	ritmo_monitor_ativo = 0; ritmo_fator = 1.0; ritmo_n = 1;
+	if (cfg.ritmo_monitor && !ritmo_falhou && tem_som && idx >= 0 && SDL_GetCurrentDisplayMode(idx, &m) == 0 && m.refresh_rate > 0) {
+		double hz = m.refresh_rate;
+		int n = (int)(hz / NEO_HZ + 0.5);
+		if (n < 1) n = 1;
+		double taxa = hz / n;
+		if (fabs(taxa / NEO_HZ - 1.0) < 0.025) { ritmo_monitor_ativo = 1; ritmo_monitor_hz = hz; ritmo_n = n; ritmo_fator = taxa / NEO_HZ; }
+	}
+	audio_fator_ritmo(ritmo_fator);
+}
 
 // ---------------------------------------------------------------- vídeo
 static SDL_Renderer *ren;
@@ -132,8 +169,11 @@ static SDL_Rect area_jogo(int ow, int oh)
 	return r;
 }
 
+static double t_apresenta, t_espera, t_emula, t_neo, t_ra, t_mix;
+#define TMS(t0) ((double)(SDL_GetPerformanceCounter() - (t0)) * 1000.0 / (double)SDL_GetPerformanceFrequency())   // diagnóstico KOF_DEBUG_FILA (ms por segundo)
 static void apresenta(void)
 {
+	Uint64 t0 = SDL_GetPerformanceCounter();
 	int ow, oh;
 	SDL_GetRendererOutputSize(ren, &ow, &oh);
 	SDL_Rect r = area_jogo(ow, oh);
@@ -152,6 +192,13 @@ static void apresenta(void)
 	prepara_mascara(r.w, r.h, f->mascara);
 	if (tex_mascara) SDL_RenderCopy(ren, tex_mascara, NULL, &r);
 	SDL_RenderPresent(ren);
+	for (int k = 1; k < ritmo_n; k++) {      // monitor a 120/240 Hz: o mesmo quadro de novo, no vsync seguinte
+		SDL_RenderCopy(ren, tex_jogo, NULL, &r);
+		if (tex_linhas) SDL_RenderCopy(ren, tex_linhas, NULL, &r);
+		if (tex_mascara) SDL_RenderCopy(ren, tex_mascara, NULL, &r);
+		SDL_RenderPresent(ren);
+	}
+	t_apresenta += (double)(SDL_GetPerformanceCounter() - t0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
 }
 
 // ---------------------------------------------------------------- principal
@@ -256,6 +303,9 @@ int main(int argc, char **argv)
 			tr = strchr(tr, ','); if (tr) tr++;
 		}
 		if (getenv("KOF_CFG")) menu_cfg_abre(atoi(getenv("KOF_CFG")) - 1);
+#ifdef KOF_TESTE
+		{ void frontend_teste_arte(void); if (getenv("KOF_VIGIA_TESTE")) frontend_teste_arte(); }
+#endif
 		FILE *fw = wav ? fopen(wav, "wb") : NULL;
 		u32 total = 0;
 		static s16 buf[8192 * 2];
@@ -284,9 +334,21 @@ int main(int argc, char **argv)
 					m68k_write_memory_8(pa, pv);
 			}
 #endif
+			video_limite_linha = cfg.sprites_sem_limite ? MAX_SPRITES_TELA : 96;
 			neo_frame();
 			treino_depois_quadro();
 #ifdef KOF_TESTE
+			if (getenv("KOF_RUNAHEAD")) {   // teste: o estado final tem que ser idêntico ao sem run-ahead
+				static s16 lx[8192 * 2];
+				int na = audio_pega_amostras(lx, 8192);
+				if (fw) { fwrite(lx, 4, (size_t)na, fw); total += (u32)na; }
+				run_ahead(atoi(getenv("KOF_RUNAHEAD")));
+			}
+			if (getenv("KOF_VIGIA_TESTE")) {   // quando o menu abriria sozinho por cima do MODE SELECT original
+				void frontend_teste_zera(void);
+				frontend_vigia();
+				if (frontend_ativo) { fprintf(stderr, "vigia abriu no quadro %u\n", neo_quadros); frontend_teste_zera(); }
+			}
 			if (getenv("KOF_LOG_PRETO")) {   // quadros com a tela quase toda preta (bug do sprite 0 na rua com carros)
 				int pretos = 0;
 				for (int y = 60; y < 200; y++) for (int x = 40; x < 300; x++) pretos += (neo_fb[y][x] & 0xffffff) < 0x080808;
@@ -339,8 +401,12 @@ int main(int argc, char **argv)
 	if (getenv("KOF_MUDO")) cfg.mudo = 1;
 	if (getenv("KOF_VSYNC")) cfg.vsync = atoi(getenv("KOF_VSYNC"));
 	if (getenv("KOF_FILTRO")) cfg.filtro = atoi(getenv("KOF_FILTRO")) % NFILTROS;
+#ifdef KOF_TESTE
+	if (getenv("KOF_RUNAHEAD")) cfg.run_ahead = atoi(getenv("KOF_RUNAHEAD"));
+	if (getenv("KOF_RITMO")) cfg.ritmo_monitor = atoi(getenv("KOF_RITMO"));
+#endif
 	SDL_Window *win = SDL_CreateWindow("KOF98 Anniversary - port nativo (kof98-recomp)", SDL_WINDOWPOS_CENTERED,
-		SDL_WINDOWPOS_CENTERED, NEO_H * escala * 4 / 3, NEO_H * escala, SDL_WINDOW_RESIZABLE | (autofoto ? SDL_WINDOW_HIDDEN : 0));
+		SDL_WINDOWPOS_CENTERED, NEO_H * escala * 4 / 3, NEO_H * escala, SDL_WINDOW_RESIZABLE | (autofoto && !getenv("KOF_JANELA") ? SDL_WINDOW_HIDDEN : 0));
 	SDL_SetWindowSize(win, NEO_H * escala * 4 / 3, NEO_H * escala);
 #ifdef KOF_SOLO
 	{   // ícone da janela (arte/icone_64.png embutido)
@@ -360,13 +426,14 @@ int main(int argc, char **argv)
 	tex_fundo = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, NEO_W, NEO_H);
 	SDL_SetTextureScaleMode(tex_fundo, SDL_ScaleModeLinear);
 	SDL_SetTextureColorMod(tex_fundo, 60, 60, 70);
-	int vsync_atual = cfg.vsync, cheia_atual = 0;
+	int vsync_atual = -1, cheia_atual = 0, ritmo_cfg_atual = -1;
 	if (cfg.tela_cheia) { SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN_DESKTOP); cheia_atual = 1; }
 
 	SDL_AudioSpec quero = {0}, tenho;
 	quero.freq = AUDIO_TAXA; quero.format = AUDIO_S16SYS; quero.channels = 2; quero.samples = 1024;
 	SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &quero, &tenho, 0);
 	if (dev) SDL_PauseAudioDevice(dev, 0);
+	ritmo_calcula(win, dev != 0);
 	entrada_init();
 
 	// menu inicial (Comunidade Edition): o jogo roda por trás dele desde o reset
@@ -431,8 +498,10 @@ int main(int argc, char **argv)
 			if (sc == SDL_SCANCODE_F3) neo_reset();
 			if (sc == SDL_SCANCODE_F12) salva_bmp("kof98_foto.bmp");
 		}
-		if (cfg.tela_cheia != cheia_atual) { cheia_atual = cfg.tela_cheia; SDL_SetWindowFullscreen(win, cheia_atual ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0); }
-		if (cfg.vsync != vsync_atual) { vsync_atual = cfg.vsync; SDL_RenderSetVSync(ren, vsync_atual); }
+		if (cfg.tela_cheia != cheia_atual) { cheia_atual = cfg.tela_cheia; SDL_SetWindowFullscreen(win, cheia_atual ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0); ritmo_calcula(win, dev != 0); }
+		if (cfg.ritmo_monitor != ritmo_cfg_atual || fps_n == 30) { ritmo_cfg_atual = cfg.ritmo_monitor; ritmo_calcula(win, dev != 0); }
+		{ int v = cfg.vsync || ritmo_monitor_ativo; if (v != vsync_atual) { vsync_atual = v; SDL_RenderSetVSync(ren, v); } }
+		video_limite_linha = cfg.sprites_sem_limite ? MAX_SPRITES_TELA : 96;
 		neo_cpu_pct = cfg.cpu;
 		musica_ligada = cfg.musica_arquivos;
 		efeitos_ligados = cfg.efeitos_arquivos;
@@ -441,6 +510,15 @@ int main(int argc, char **argv)
 		int pausado = !frontend_ativo && (cfgmenu_aberto || treino_aberto || (sem_foco && cfg.pausa_sem_foco));
 		if (frontend_ativo) frontend_controles(&rodando);
 		int passos = pausado ? 0 : frontend_passos();   // >1 = avanço rápido escondido atrás do menu
+		int rapido = passos > 1;
+		if (!rapido && !pausado && ritmo_monitor_ativo && dev) {   // vsync dita o ritmo; a fila de som só corrige a deriva
+			double fila_q = SDL_GetQueuedAudioSize(dev) / 4.0 / ((double)AUDIO_TAXA / NEO_HZ);
+			passos = fila_q < 1.5 ? 2 : fila_q > 6.0 ? 0 : 1;
+			double aj = (fila_q - 3.0) * 0.004;
+			if (aj > 0.015) aj = 0.015; if (aj < -0.015) aj = -0.015;
+			audio_fator_ritmo(ritmo_fator * (1.0 + aj));
+		}
+		Uint64 t_em0 = SDL_GetPerformanceCounter();
 		for (int passo_i = 0; passo_i < passos; passo_i++) {
 			int piloto = frontend_piloto();
 			if (!piloto) config_aplica_entradas();
@@ -450,14 +528,21 @@ int main(int argc, char **argv)
 			if (!piloto && SDL_GetKeyboardState(NULL)[SDL_SCANCODE_F2]) neo_in_test = 0;
 			if (!piloto) treino_entradas();
 			config_aplica_cenario();
+			Uint64 tq = SDL_GetPerformanceCounter();
 			neo_frame();
+			t_neo += TMS(tq); tq = SDL_GetPerformanceCounter();
 			treino_depois_quadro();
+			frontend_vigia();
 			int n = audio_pega_amostras(amostras, 8192);
-			if (passos > 1) continue;              // avanço rápido: som descartado
+			t_mix += TMS(tq); tq = SDL_GetPerformanceCounter();
+			if (rapido) continue;                  // avanço rápido: som descartado
+			if (!piloto && cfg.run_ahead > 0 && !frontend_ativo) run_ahead(cfg.run_ahead);
+			t_ra += TMS(tq);
 			int vol = cfg.mudo ? 0 : cfg.volume;
 			if (vol != 100) for (int i = 0; i < n * 2; i++) amostras[i] = (s16)(amostras[i] * vol / 100);
 			if (dev) {
 				Uint32 fila = SDL_GetQueuedAudioSize(dev);
+				t_emula += (double)(SDL_GetPerformanceCounter() - t_em0) * 1000.0 / (double)SDL_GetPerformanceFrequency(); t_em0 = SDL_GetPerformanceCounter();
 				if (getenv("KOF_DEBUG_FILA")) {      // diagnóstico: fila de áudio antes de enfileirar
 					static Uint32 t0, mn = ~0u, mx, vazias, quadros;
 					if (!t0) t0 = SDL_GetTicks();
@@ -466,7 +551,8 @@ int main(int argc, char **argv)
 					if (fila == 0) vazias++;
 					quadros++;
 					if (SDL_GetTicks() - t0 >= 1000) {
-						fprintf(stderr, "fila: min %u max %u vazias %u quadros %u\n", mn / 4, mx / 4, vazias, quadros);
+						fprintf(stderr, "fila: min %u max %u vazias %u quadros %u | ms/s: emula %.0f (neo %.0f mix %.0f ra %.0f) apresenta %.0f espera %.0f | ritmo %d (%.0f Hz x%d) vsync %d\n", mn / 4, mx / 4, vazias, quadros, t_emula, t_neo, t_mix, t_ra, t_apresenta, t_espera, ritmo_monitor_ativo, ritmo_monitor_hz, ritmo_n, vsync_atual);
+						t_emula = t_apresenta = t_espera = t_neo = t_mix = t_ra = 0;
 						t0 = SDL_GetTicks(); mn = ~0u; mx = 0; vazias = 0; quadros = 0;
 					}
 				}
@@ -479,7 +565,13 @@ int main(int argc, char **argv)
 		treino_desenha(tela);
 		menu_cfg_desenha(tela);
 		fps_n++;
-		if (SDL_GetTicks() - fps_t >= 1000) { fps = fps_n; fps_n = 0; fps_t = SDL_GetTicks(); }
+		if (SDL_GetTicks() - fps_t >= 1000) {
+			fps = fps_n; fps_n = 0; fps_t = SDL_GetTicks();
+			static int ruim;      // ritmo do monitor: se o vsync não segura ~60 fps por 2 s seguidos, volta ao ritmo pelo som
+			if (ritmo_monitor_ativo && !pausado && fps < (Uint32)(NEO_HZ - 5)) { if (++ruim >= 2) { ritmo_falhou = 1; ritmo_calcula(win, dev != 0); ritmo_aviso_ate = SDL_GetTicks() + 6000; if (getenv("KOF_DEBUG_FILA")) fprintf(stderr, "ritmo do monitor desligado: %u fps\n", fps); } }
+			else ruim = 0;
+		}
+		if (SDL_GetTicks() < ritmo_aviso_ate) { ui_alvo(tela); ui_texto_centro(NEO_H - 24, "Ritmo do monitor desligado: o vsync não segurou 60 fps", 0xffffe060u); }
 		if (cfg.mostra_fps) {
 			char b[16];
 			snprintf(b, sizeof b, "%u fps", fps);
@@ -498,10 +590,15 @@ int main(int argc, char **argv)
 			rodando = 0;
 		}
 
-		// ritmo: com som, a fila de áudio manda (nunca descarta nem falta amostra); sem som, relógio
-		if (dev && !pausado) {
-			const Uint32 alvo = 4u * (Uint32)((double)AUDIO_TAXA / NEO_HZ * 3);   // ~3 quadros de som na fila
+		// ritmo: com som, a fila de áudio manda (nunca descarta nem falta amostra); sem som, relógio.
+		// No ritmo do monitor o vsync já segurou o laço (passos acima corrige a fila).
+		if (dev && !pausado && ritmo_monitor_ativo && !rapido) {
+			proximo = (double)SDL_GetPerformanceCounter();
+		} else if (dev && !pausado) {
+			const Uint32 alvo = 4u * (Uint32)((double)AUDIO_TAXA / NEO_HZ * 2);   // ~2 quadros de som na fila
+			Uint64 t0 = SDL_GetPerformanceCounter();
 			while (SDL_GetQueuedAudioSize(dev) > alvo) SDL_Delay(1);
+			t_espera += (double)(SDL_GetPerformanceCounter() - t0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
 			proximo = (double)SDL_GetPerformanceCounter();
 		} else {
 			proximo += passo;
