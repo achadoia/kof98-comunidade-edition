@@ -85,6 +85,14 @@ do P1 (9F86-89 normal, F1EF-F2 segurando Start; x19-44 y184-210). Achar tiles: b
 `KOF_MAPA="quadro,arq.bin"` grava, por pixel, `código<<8 | linha<<4 | coluna` do tile que o pintou.
 Nome completo: `tools/renomear.py TERRY BOGARD URAMESHI` (campos fixos de 8 letras) -> patch `nome_terry_ae`.
 
+### Fotos em alta resolução (`tools/fotos.py` -> `bin/arte/overlay.bin` + `fotos.bin`)
+18/10: além da troca de tiles (pixelada), o renderizador anota por quadro onde os tiles de cada alvo do `retratos.json`
+foram pintados (`video_ovl`: origem exata da arte pelo deslocamento do tile, caixa visível no fim do quadro, espelhado)
+e o `main.c` desenha o PNG da foto (recorte x8) por cima, no tamanho da janela, só na parte visível, antes da camada de
+interface (`tela_ui`, transparente: treino, F1, tela de ordem). Alvos com `sem_foto` ficam só na troca de tiles; `sem_troca`
+só foto. Artes da tela de ordem (96x96, uma por personagem, as 3 posições) estão mapeadas mas desligadas a pedido do
+usuário. Lab: `KOF_MAPA` + roteiro Team VS; na seleção o cursor anda sozinho uma casa pra direita a cada escolha.
+
 ### Trilha trocável (`bin/som/musica/`)
 Arquivo `.ogg`/`.mp3`/`.wav` com o nome começando pelo código da música (`28.ogg`, `"32 Esaka.mp3"`) toca no
 lugar da música do chip; sem arquivo, toca a original. F1 → Som: liga/desliga, "Reler a pasta" e

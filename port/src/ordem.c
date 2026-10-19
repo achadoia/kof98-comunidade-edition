@@ -26,6 +26,7 @@
 int ordem_ligada = 1;
 static int ativo, congelado_ok, quadros_ativo;
 static u32 congelado[NEO_H][NEO_W];
+OvlCaixa ordem_ovl[64][2];            // onde as artes estavam no quadro congelado (as fotos seguem a imagem congelada)
 static u8 antes[2];
 
 enum { ET_MODO, ET_ORDEM, ET_SEQ, ET_PRONTO };
@@ -74,6 +75,12 @@ static void monta_seq(int j, int l)
 static int toques_modo(int m) { return m == 2 ? 1 : m == 1 ? 2 : 0; }
 
 int ordem_ativa(void) { return ativo; }
+// 1 enquanto a tela mostra as colunas congeladas (as fotos devem usar ordem_ovl, não o quadro atual)
+int ordem_mostra_congelado(void)
+{
+	if (!ativo || !congelado_ok || rd(RAM_FASE_ORD) < 5) return 0;
+	return !(rd(RAM_CONT_P1) >= 3 && rd(RAM_CONT_P2) >= 3);
+}
 
 void ordem_entradas(void)
 {
@@ -85,7 +92,7 @@ void ordem_entradas(void)
 	}
 	quadros_ativo++;
 	int pronta = rd(RAM_FASE_ORD) >= 5;
-	if (pronta && !congelado_ok && quadros_ativo > 2) { memcpy(congelado, neo_fb, sizeof congelado); congelado_ok = 1; }
+	if (pronta && !congelado_ok && quadros_ativo > 2) { memcpy(congelado, neo_fb, sizeof congelado); memcpy(ordem_ovl, video_ovl, sizeof ordem_ovl); congelado_ok = 1; }
 	for (int j = 0; j < 2; j++) {
 		u8 *in = j ? &neo_in_p2 : &neo_in_p1;
 		u8 ativos = (u8)~*in;
@@ -153,7 +160,7 @@ static void botao(u32 tela[NEO_H][NEO_W], int cx, int cy, int qual)
 }
 
 // colunas congeladas + etapa de cada jogador, por cima do quadro
-void ordem_desenha(u32 tela[NEO_H][NEO_W])
+void ordem_desenha(u32 tela[NEO_H][NEO_W], u32 ui[NEO_H][NEO_W])
 {
 	if (!ativo || !congelado_ok || rd(RAM_FASE_ORD) < 5) return;
 	int c1 = rd(RAM_CONT_P1), c2 = rd(RAM_CONT_P2);
@@ -162,7 +169,7 @@ void ordem_desenha(u32 tela[NEO_H][NEO_W])
 		memcpy(&tela[y][0], &congelado[y][0], 140 * sizeof(u32));
 		memcpy(&tela[y][180], &congelado[y][180], 140 * sizeof(u32));
 	}
-	ui_alvo(tela);
+	ui_alvo(ui);
 	static const int Y_POS[3] = {28, 76, 136};        // topo, meio, grande
 	for (int j = 0; j < 2; j++) {
 		int x0 = j ? 180 : 0;
@@ -175,9 +182,9 @@ void ordem_desenha(u32 tela[NEO_H][NEO_W])
 				rotulo(x0 + 4, Y_POS[p], s, COR_MODO[m], sel);
 			}
 		} else if (et == ET_ORDEM) {
-			for (int p = 0; p < 3; p++) botao(tela, j ? NEO_W - 18 : 18, Y_POS[p] + 4, p);   // A topo, B meio, C baixo
+			for (int p = 0; p < 3; p++) botao(ui, j ? NEO_W - 18 : 18, Y_POS[p] + 4, p);   // A topo, B meio, C baixo
 		}
-		ui_alvo(tela);
+		ui_alvo(ui);
 		const char *l1 = et == ET_MODO ? "ESCOLHA O MODO" : et == ET_ORDEM ? "ESCOLHA A ORDEM" : "PRONTO";
 		const char *l2 = et == ET_MODO ? "^v quem  <> modo  A ok" : et == ET_ORDEM ? "quem começa?" : "esperando o outro";
 		int w = ui_largura(l1) > ui_largura(l2) ? ui_largura(l1) : ui_largura(l2);

@@ -157,8 +157,10 @@ static inline int sprite_na_linha(int linha, int y, int linhas)
 	return linhas == 0 || linhas >= 0x20 || ((linha - y) & 0x1ff) < linhas * 0x10;
 }
 
+static void ovl_zera(void);
 void video_linha_inicio(int linha)
 {
+	if (linha == 16) ovl_zera();
 	u16 *lista = listas[linha & 1];
 	int y = 0, linhas = 0, n = 0;
 	for (u16 s = 0; s < MAX_SPRITES_TELA; s++) {
@@ -182,6 +184,7 @@ static inline u8 pixel_sprite(u32 romaddr)
 }
 
 static u32 linha_buf[512];
+static u8 linha_ovl[512];     // alvo de foto que pintou por último cada pixel desta linha (0 = nenhum)
 
 // Tiles trocados (arte/troca_tiles.bin, tools/retratos.py): o tile da ROM com esse código é pintado com
 // estes 16x16 pixels ARGB em vez da paleta; alfa 0 = pixel original, alfa 1 = transparente. Usado nos retratos personalizados.
@@ -212,6 +215,72 @@ static int troca_carrega_bytes(const u8 *d, size_t n)
 	}
 	return ntroca;
 }
+// Fotos em alta resolução (arte/retratos.json -> bin/arte/fotos.bin): o renderizador só anota, por quadro, onde os
+// tiles de cada foto foram pintados (caixa por lado da tela e se estavam espelhados); o main.c desenha a foto por
+// cima, no tamanho da janela, sem passar pelos 320x224.
+#define NFOTO 64
+OvlCaixa video_ovl[NFOTO][2];
+int video_ovl_n;
+static struct { u32 code; u8 alvo; s16 dx, dy; } ovl_tab[2048];
+static int ovl_idx_atual;   // índice em ovl_tab do tile sendo pintado
+static int ovl_hash[4096];
+static int ovl_busca(u32 code)
+{
+	if (!video_ovl_n) return 0;
+	for (u32 h = (code * 2654435761u) % 4096;; h = (h + 1) % 4096) {
+		int i = ovl_hash[h];
+		if (!i) return 0;
+		if (ovl_tab[i - 1].code == code) { ovl_idx_atual = i - 1; return ovl_tab[i - 1].alvo; }
+	}
+}
+// formato: u32 n_alvos; por alvo: u32 n_codes, u32 codes[]  (alvo = índice + 1)
+int video_ovl_carrega_bytes(const u8 *d, size_t n)
+{
+	memset(ovl_hash, 0, sizeof ovl_hash);
+	video_ovl_n = 0;
+	int nt = 0;
+	size_t i = 4;
+	if (n < 4) return 0;
+	u32 na; memcpy(&na, d, 4);
+	for (u32 a = 0; a < na && a < NFOTO && i + 4 <= n; a++) {
+		u32 nc; memcpy(&nc, d + i, 4); i += 4;
+		for (u32 k = 0; k < nc && i + 8 <= n && nt < 2048; k++, i += 8) {
+			u32 c; s16 dx, dy; memcpy(&c, d + i, 4); memcpy(&dx, d + i + 4, 2); memcpy(&dy, d + i + 6, 2);
+			ovl_tab[nt].code = c; ovl_tab[nt].alvo = (u8)(a + 1); ovl_tab[nt].dx = dx; ovl_tab[nt].dy = dy;
+			u32 h = (c * 2654435761u) % 4096;
+			while (ovl_hash[h]) h = (h + 1) % 4096;
+			ovl_hash[h] = ++nt;
+		}
+		video_ovl_n = (int)a + 1;
+	}
+	return video_ovl_n;
+}
+int video_ovl_carrega(const char *arq)
+{
+	FILE *f = fopen(arq, "rb");
+	if (!f) return 0;
+	fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+	u8 *d = malloc((size_t)n);
+	size_t lidos = fread(d, 1, (size_t)n, f);
+	fclose(f);
+	int r = video_ovl_carrega_bytes(d, lidos);
+	free(d);
+	return r;
+}
+static void ovl_zera(void) { memset(video_ovl, 0, sizeof video_ovl); for (int a = 0; a < NFOTO; a++) for (int l = 0; l < 2; l++) { video_ovl[a][l].x0 = video_ovl[a][l].y0 = 9999; video_ovl[a][l].ox = video_ovl[a][l].oy = 9999; video_ovl[a][l].rx = -9999; video_ovl[a][l].vx0 = video_ovl[a][l].vy0 = 9999; video_ovl[a][l].vx1 = video_ovl[a][l].vy1 = -1; } }
+// um tile da arte foi pintado: x = esquerda do tile na tela, ytopo = linha de cima do tile, esp = espelhado
+static inline void ovl_marca_tile(int alvo, int idx, int x, int ytopo, int esp)
+{
+	OvlCaixa *c = &video_ovl[alvo - 1][x < NEO_W / 2 ? 0 : 1];
+	int dx = ovl_tab[idx].dx, dy = ovl_tab[idx].dy;
+	if (!esp) { if (x - dx < c->ox) c->ox = x - dx; }
+	else { if (x + 16 + dx > c->rx) c->rx = x + 16 + dx; }     // espelhado: a origem é a borda direita
+	if (ytopo - dy < c->oy) c->oy = ytopo - dy;
+	if (x < c->x0) c->x0 = x; if (x + 15 > c->x1) c->x1 = x + 15;
+	if (ytopo < c->y0) c->y0 = ytopo; if (ytopo + 15 > c->y1) c->y1 = ytopo + 15;
+	c->n++; c->esp += esp;
+}
+
 #ifdef KOF_SOLO
 extern const unsigned char embutido_tiles[];
 extern const size_t embutido_tiles_tam;
@@ -288,6 +357,8 @@ static void desenha_sprites(int linha, const u32 *pens)
 		if (attr & 1) { gfx += 0x0f; inc = -1; }
 		const u32 *lp = pens + ((attr >> 8) << 4);
 		const u32 *tr = troca_busca(code);
+		int ov = ovl_busca(code);
+		if (ov && x < NEO_W && zoom_x == 0x0f) ovl_marca_tile(ov, ovl_idx_atual, x, linha - 16 - sy, attr & 1);
 		int px = x;
 #ifdef KOF_TESTE
 		static int spr_l = -2, spr_q; if (spr_l == -2) { spr_l = getenv("KOF_SPR") ? atoi(getenv("KOF_SPR")) : -1; spr_q = getenv("KOF_SPR_Q") ? atoi(getenv("KOF_SPR_Q")) : 0; }
@@ -301,8 +372,8 @@ static void desenha_sprites(int linha, const u32 *pens)
 			if (zx & 0x8000) {
 				u8 c = pixel_sprite(gfx);
 				u32 t = tr ? tr[(sy << 4) | (gfx & 0x0f)] : 0;
-				if (t >> 24 > 1) linha_buf[px & 0x1ff] = t;      // cor do retrato
-				else if (!t && c) linha_buf[px & 0x1ff] = lp[c];  // alfa 0 = original; alfa 1 = transparente
+				if (t >> 24 > 1) { linha_buf[px & 0x1ff] = t; linha_ovl[px & 0x1ff] = (u8)ov; }      // cor do retrato
+				else if (!t && c) { linha_buf[px & 0x1ff] = lp[c]; linha_ovl[px & 0x1ff] = (u8)ov; }  // alfa 0 = original; alfa 1 = transparente
 #ifdef KOF_TESTE
 				if (c) mapa_buf[px & 0x1ff] = code << 8 | (u32)sy << 4 | (gfx & 0x0f);
 #endif
@@ -341,10 +412,17 @@ void video_linha_fim(int linha)
 	const u32 *pens = (video_shadow ? rgb_sombra : rgb) + (video_banco_paleta ? 0x1000 : 0);
 	u32 fundo = pens[0xfff];
 	for (int i = 0; i < 512; i++) linha_buf[i] = fundo;
+	memset(linha_ovl, 0, sizeof linha_ovl);
 #ifdef KOF_TESTE
 	memset(mapa_buf, 0xff, sizeof mapa_buf);
 #endif
 	desenha_sprites(linha, pens);
+	for (int x = 0; x < NEO_W; x++) if (linha_ovl[x]) {        // parte da arte que ficou visível (o resto foi coberto)
+		OvlCaixa *c = &video_ovl[linha_ovl[x] - 1][x < NEO_W / 2 ? 0 : 1];
+		int y = linha - 16;
+		if (x < c->vx0) c->vx0 = x; if (x > c->vx1) c->vx1 = x;
+		if (y < c->vy0) c->vy0 = y; if (y > c->vy1) c->vy1 = y;
+	}
 #ifdef KOF_TESTE
 	{
 		static FILE *fm; static long q = -2; static char arq[300];

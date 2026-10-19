@@ -25,7 +25,7 @@ static const char *liga(int v) { return v ? "ligado" : "desligado"; }
 static int linhas_aba(void)
 {
 	switch (aba) {
-	case 0: return 8;
+	case 0: return 9;
 	case 1: return 3 + NACOES;     // jogador, assistente, ações..., restaurar
 	case 2: return 5;
 	default: return 6;
@@ -49,6 +49,7 @@ static void muda(int d)
 		case 5: cfg.mostra_fps = !cfg.mostra_fps; break;
 		case 6: cfg.ritmo_monitor = !cfg.ritmo_monitor; break;
 		case 7: cfg.sprites_sem_limite = !cfg.sprites_sem_limite; break;
+		case 8: cfg.fotos = !cfg.fotos; break;
 		}
 		break;
 	case 1:
@@ -228,6 +229,7 @@ void menu_cfg_desenha(u32 tela[NEO_H][NEO_W])
 		  else snprintf(v, sizeof v, "ligado (monitor incompatível)"); }
 		item(y, 6, "Ritmo do monitor", v, UI_CINZA); y += 14;
 		item(y, 7, "Sprites sem limite por linha", liga(cfg.sprites_sem_limite), UI_CINZA); y += 14;
+		item(y, 8, "Fotos dos homenageados em HD", liga(cfg.fotos), UI_CINZA); y += 14;
 		ui_texto(20, y + 6, "F4 troca o filtro durante o jogo.", UI_APAGADO);
 		ui_texto(20, y + 18, "Ritmo do monitor: o jogo roda a 60 Hz", UI_APAGADO);
 		ui_texto(20, y + 28, "(1,4% mais rápido) casado com o vsync,", UI_APAGADO);

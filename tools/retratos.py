@@ -52,6 +52,8 @@ def main():
     for r in spec["retratos"]:
         img_padrao = Image.open(os.path.join(ARTE, r["imagem"])).convert("RGB")
         for alvo in r["alvos"]:
+            if alvo.get("sem_troca"):
+                continue
             img = Image.open(os.path.join(ARTE, alvo["imagem"])).convert("RGB") if alvo.get("imagem") else img_padrao
             x0, y0, x1, y1 = alvo["area"]
             w, h = x1 - x0 + 1, y1 - y0 + 1

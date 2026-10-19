@@ -12,6 +12,7 @@ void ui_mistura(int x, int y, u32 c, int alfa)
 {
 	if (x < 0 || x >= NEO_W || y < 0 || y >= NEO_H) return;
 	u32 d = T[y][x];
+	if (!(d >> 24)) { T[y][x] = (u32)(alfa > 255 ? 255 : alfa) << 24 | (c & 0xffffff); return; }   // camada transparente: fica a cor com esse alfa
 	u32 r = (((c >> 16) & 255) * alfa + ((d >> 16) & 255) * (256 - alfa)) >> 8;
 	u32 g = (((c >> 8) & 255) * alfa + ((d >> 8) & 255) * (256 - alfa)) >> 8;
 	u32 b = ((c & 255) * alfa + (d & 255) * (256 - alfa)) >> 8;

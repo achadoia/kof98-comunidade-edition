@@ -82,6 +82,11 @@ void video_vsync(void);               // contador de animação automática
 extern int video_shadow, video_banco_paleta, video_fix_cart;
 extern u8 video_anim_contador;
 extern int video_limite_linha;        // sprites por linha (96 = hardware)
+typedef struct { int x0, y0, x1, y1, n, esp, ox, oy, rx, vx0, vy0, vx1, vy1; } OvlCaixa;   // v* = parte visível no fim do quadro   // tiles de uma foto pintados neste quadro: caixa, n tiles, esp espelhados, origem (ox,oy) / borda direita rx
+extern OvlCaixa video_ovl[64][2];     // [foto][lado esquerdo/direito da tela]
+extern int video_ovl_n;
+int video_ovl_carrega(const char *arq);
+int video_ovl_carrega_bytes(const u8 *d, size_t n);
 #define MAX_SPRITES_TELA 381
 // interrupção de posição (IRQ2 / raster)
 extern u32 video_irq2_ctrl;

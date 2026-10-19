@@ -23,12 +23,11 @@
 #include <string.h>
 #include <windows.h>
 #include <math.h>
-#ifdef KOF_SOLO
 #include "stb_image.h"
-#endif
 
 char cfg_arquivo[512] = "kof98.ini";
 static u32 tela[NEO_H][NEO_W];
+static u32 tela_ui[NEO_H][NEO_W];   // interface do EXE (treino, F1, tela de ordem): camada transparente desenhada por cima das fotos
 
 // ---------------------------------------------------------------- roteiro de entradas (modo de teste)
 typedef struct { u32 ini, fim; u8 *alvo; u8 bits; } Passo;
@@ -102,9 +101,77 @@ static void ritmo_calcula(SDL_Window *win, int tem_som)
 	audio_fator_ritmo(ritmo_fator);
 }
 
-// ---------------------------------------------------------------- vídeo
+// ---------------------------------------------------------------- fotos em alta resolução (retratos dos homenageados)
+// bin/arte/fotos.bin (tools/retratos.py): u32 n; por foto: u32 tam_png, u16 w, u16 h (tamanho da arte no jogo, px), u8 esp, u8 pad, png.
+// A ordem das fotos é a dos alvos de overlay.bin (video_ovl). O renderizador anota onde cada arte foi pintada; aqui a
+// foto é desenhada por cima, escalada pro tamanho da janela, então fica nítida mesmo em tela cheia.
+typedef struct { SDL_Texture *tex; int w, h, esp; } Foto;
+static Foto fotos[64];
+static int nfotos;
 static SDL_Renderer *ren;
-static SDL_Texture *tex_jogo, *tex_fundo, *tex_linhas, *tex_mascara;
+static void fotos_carrega_bytes(const u8 *d, size_t n)
+{
+	if (n < 4) return;
+	u32 nf; memcpy(&nf, d, 4);
+	size_t i = 4;
+	for (u32 k = 0; k < nf && k < 64 && i + 10 <= n; k++) {
+		u32 tam; u16 w, h; u8 esp;
+		memcpy(&tam, d + i, 4); memcpy(&w, d + i + 4, 2); memcpy(&h, d + i + 6, 2); esp = d[i + 8]; i += 10;
+		if (i + tam > n) break;
+		int iw, ih, ic;
+		unsigned char *px = stbi_load_from_memory(d + i, (int)tam, &iw, &ih, &ic, 4);
+		i += tam;
+		fotos[k] = (Foto){NULL, w, h, esp};
+		if (!px) { nfotos = (int)k + 1; continue; }
+		SDL_Surface *s = SDL_CreateRGBSurfaceWithFormatFrom(px, iw, ih, 32, iw * 4, SDL_PIXELFORMAT_RGBA32);
+		if (s) { fotos[k].tex = SDL_CreateTextureFromSurface(ren, s); SDL_FreeSurface(s); }
+		if (fotos[k].tex) SDL_SetTextureScaleMode(fotos[k].tex, SDL_ScaleModeLinear);
+		stbi_image_free(px);
+		nfotos = (int)k + 1;
+	}
+}
+static void fotos_carrega(const char *arq)
+{
+	FILE *f = fopen(arq, "rb");
+	if (!f) return;
+	fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+	u8 *d = malloc((size_t)n);
+	size_t lidos = fread(d, 1, (size_t)n, f);
+	fclose(f);
+	fotos_carrega_bytes(d, lidos);
+	free(d);
+}
+// desenha as fotos cujas artes apareceram neste quadro (ou no quadro congelado da tela de ordem), de cima pra baixo
+static void fotos_desenha(const SDL_Rect *r, OvlCaixa (*cx)[2])
+{
+	typedef struct { int a, l; } It;
+	It its[128]; int n = 0;
+	for (int a = 0; a < nfotos && a < video_ovl_n; a++)
+		for (int l = 0; l < 2; l++)
+			if (cx[a][l].n >= 2 && fotos[a].tex && n < 128) its[n++] = (It){a, l};
+	for (int i = 1; i < n; i++) {        // ordena por origem y: o de baixo cobre o de cima, como no jogo
+		It t = its[i]; int j = i - 1;
+		while (j >= 0 && cx[its[j].a][its[j].l].oy > cx[t.a][t.l].oy) { its[j + 1] = its[j]; j--; }
+		its[j + 1] = t;
+	}
+	for (int i = 0; i < n; i++) {
+		const OvlCaixa *c = &cx[its[i].a][its[i].l];
+		const Foto *f = &fotos[its[i].a];
+		int esp = c->esp * 2 > c->n;
+		int ox = esp ? c->rx - f->w : c->ox, oy = c->oy;
+		if (ox == 9999 || ox == -9999 - f->w || oy == 9999 || c->vx1 < 0) continue;
+		// só a parte da arte que ficou visível (o resto o jogo cobriu com outro retrato, caixa de modo...)
+		int ix0 = c->vx0 > ox ? c->vx0 : ox, iy0 = c->vy0 > oy ? c->vy0 : oy;
+		int ix1 = c->vx1 < ox + f->w - 1 ? c->vx1 : ox + f->w - 1, iy1 = c->vy1 < oy + f->h - 1 ? c->vy1 : oy + f->h - 1;
+		if (ix1 < ix0 || iy1 < iy0) continue;
+		int tw, th; SDL_QueryTexture(f->tex, NULL, NULL, &tw, &th);
+		int fl = esp ^ f->esp;
+		SDL_Rect src = {(fl ? (ox + f->w - 1 - ix1) : (ix0 - ox)) * tw / f->w, (iy0 - oy) * th / f->h, (ix1 - ix0 + 1) * tw / f->w, (iy1 - iy0 + 1) * th / f->h};
+		SDL_Rect dst = {r->x + ix0 * r->w / NEO_W, r->y + iy0 * r->h / NEO_H, (ix1 - ix0 + 1) * r->w / NEO_W, (iy1 - iy0 + 1) * r->h / NEO_H};
+		SDL_RenderCopyEx(ren, f->tex, &src, &dst, 0, NULL, fl ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+	}
+}
+static SDL_Texture *tex_jogo, *tex_fundo, *tex_linhas, *tex_mascara, *tex_ui;
 static int linhas_int = -1, mascara_w, mascara_h, mascara_int = -1;
 
 typedef struct { int linear, linhas, mascara; } Filtro;   // linhas/máscara: 0-255 de escurecimento
@@ -188,6 +255,8 @@ static void apresenta(void)
 		SDL_RenderCopy(ren, tex_fundo, NULL, NULL);
 	}
 	SDL_RenderCopy(ren, tex_jogo, NULL, &r);
+	if (cfg.fotos && nfotos && !cfgmenu_aberto) fotos_desenha(&r, ordem_mostra_congelado() ? ordem_ovl : video_ovl);
+	if (tex_ui) { SDL_UpdateTexture(tex_ui, NULL, tela_ui, NEO_W * 4); SDL_RenderCopy(ren, tex_ui, NULL, &r); }
 	prepara_linhas(f->linhas);
 	if (tex_linhas) SDL_RenderCopy(ren, tex_linhas, NULL, &r);
 	prepara_mascara(r.w, r.h, f->mascara);
@@ -228,11 +297,14 @@ int main(int argc, char **argv)
 	musica_init(basep);
 #ifdef KOF_SOLO
 	video_troca_embutida();
+	{ extern const unsigned char embutido_overlay[]; extern const size_t embutido_overlay_tam; video_ovl_carrega_bytes(embutido_overlay, embutido_overlay_tam); }
 #else
 	{
 		char t[700];
 		snprintf(t, sizeof t, "%sarte/troca_tiles.bin", basep ? basep : "");
 		video_troca_carrega(t);
+		snprintf(t, sizeof t, "%sarte/overlay.bin", basep ? basep : "");
+		video_ovl_carrega(t);
 	}
 #endif
 	efeitos_init(basep);
@@ -386,7 +458,7 @@ int main(int argc, char **argv)
 			fclose(fw);
 		}
 		memcpy(tela, neo_fb, sizeof tela);
-		ordem_desenha(tela);
+		ordem_desenha(tela, tela);
 		treino_desenha(tela);
 		menu_cfg_desenha(tela);
 #ifdef KOF_TESTE
@@ -434,8 +506,15 @@ int main(int argc, char **argv)
 	SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 	ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | (cfg.vsync ? SDL_RENDERER_PRESENTVSYNC : 0));
 	tex_jogo = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, NEO_W, NEO_H);
+#ifdef KOF_SOLO
+	{ extern const unsigned char embutido_fotos[]; extern const size_t embutido_fotos_tam; fotos_carrega_bytes(embutido_fotos, embutido_fotos_tam); }
+#else
+	{ char *bp = SDL_GetBasePath(); char t[700]; snprintf(t, sizeof t, "%sarte/fotos.bin", bp ? bp : ""); fotos_carrega(t); SDL_free(bp); }
+#endif
 	tex_fundo = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, NEO_W, NEO_H);
 	SDL_SetTextureScaleMode(tex_fundo, SDL_ScaleModeLinear);
+	tex_ui = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, NEO_W, NEO_H);
+	SDL_SetTextureBlendMode(tex_ui, SDL_BLENDMODE_BLEND);
 	SDL_SetTextureColorMod(tex_fundo, 60, 60, 70);
 	int vsync_atual = -1, cheia_atual = 0, ritmo_cfg_atual = -1;
 	if (cfg.tela_cheia) { SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN_DESKTOP); cheia_atual = 1; }
@@ -581,9 +660,10 @@ int main(int argc, char **argv)
 		} else if (frontend_ativo) frontend_desenha(ren);
 		else {
 		memcpy(tela, neo_fb, sizeof tela);
-		ordem_desenha(tela);
-		treino_desenha(tela);
-		menu_cfg_desenha(tela);
+		memset(tela_ui, 0, sizeof tela_ui);
+		ordem_desenha(tela, tela_ui);
+		treino_desenha(tela_ui);
+		menu_cfg_desenha(tela_ui);
 		fps_n++;
 		if (SDL_GetTicks() - fps_t >= 1000) {
 			fps = fps_n; fps_n = 0; fps_t = SDL_GetTicks();
@@ -591,11 +671,11 @@ int main(int argc, char **argv)
 			if (ritmo_monitor_ativo && !pausado && fps < (Uint32)(NEO_HZ - 5)) { if (++ruim >= 2) { ritmo_falhou = 1; ritmo_calcula(win, dev != 0); ritmo_aviso_ate = SDL_GetTicks() + 6000; if (getenv("KOF_DEBUG_FILA")) fprintf(stderr, "ritmo do monitor desligado: %u fps\n", fps); } }
 			else ruim = 0;
 		}
-		if (SDL_GetTicks() < ritmo_aviso_ate) { ui_alvo(tela); ui_texto_centro(NEO_H - 24, "Ritmo do monitor desligado: o vsync não segurou 60 fps", 0xffffe060u); }
+		if (SDL_GetTicks() < ritmo_aviso_ate) { ui_alvo(tela_ui); ui_texto_centro(NEO_H - 24, "Ritmo do monitor desligado: o vsync não segurou 60 fps", 0xffffe060u); }
 		if (cfg.mostra_fps) {
 			char b[16];
 			snprintf(b, sizeof b, "%u fps", fps);
-			ui_alvo(tela);
+			ui_alvo(tela_ui);
 			ui_texto(NEO_W - ui_largura(b) - 4, NEO_H - 12, b, 0xff60ff90u);
 		}
 		apresenta();

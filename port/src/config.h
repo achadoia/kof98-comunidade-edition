@@ -22,6 +22,7 @@ typedef struct {
 	int ritmo_monitor;           // 1 = roda a 60 Hz (ou múltiplo) com vsync: sem engasgo de 59,19 vs 60
 	int sprites_sem_limite;      // 1 = ignora o limite de 96 sprites por linha (nada some em cena cheia)
 	int ordem_botao;             // 1 = ORDER SELECT por A/B/C com as colunas escondidas do adversário
+	int fotos;                   // 1 = fotos dos homenageados em alta resolução por cima dos retratos
 	Ligacao lig[2][NACOES][NLIG];
 } Config;
 

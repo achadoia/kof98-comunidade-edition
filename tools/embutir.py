@@ -35,6 +35,8 @@ def main():
     png = open(os.path.join(RAIZ, "port", "arte", "menu_fundo.png"), "rb").read()
     tiles = open(os.path.join(RAIZ, "port", "bin", "arte", "troca_tiles.bin"), "rb").read()
     icone = open(os.path.join(RAIZ, "port", "arte", "icone_64.png"), "rb").read()
+    fotos = open(os.path.join(RAIZ, "port", "bin", "arte", "fotos.bin"), "rb").read()
+    overlay = open(os.path.join(RAIZ, "port", "bin", "arte", "overlay.bin"), "rb").read()
     patches = []
     dono = {}
     for nome in PATCHES:
@@ -56,7 +58,9 @@ def main():
         f.write(f"const unsigned char embutido_tiles[] = {{\n{bytes_c(tiles)}\n}};\nconst size_t embutido_tiles_tam = {len(tiles)};\n")
         f.write(f"const unsigned char embutido_icone_png[] = {{\n{bytes_c(icone)}\n}};\nconst size_t embutido_icone_png_tam = {len(icone)};\n")
         f.write(f"const unsigned char embutido_patches[] = {{\n{bytes_c(blob)}\n}};\nconst size_t embutido_patches_tam = {len(blob)};\n")
-    print(f"embutido.c: menu {len(png)} B, retratos {len(tiles)} B, {len(patches)} patches ({len(blob)} B)")
+        f.write(f"const unsigned char embutido_fotos[] = {{\n{bytes_c(fotos)}\n}};\nconst size_t embutido_fotos_tam = {len(fotos)};\n")
+        f.write(f"const unsigned char embutido_overlay[] = {{\n{bytes_c(overlay)}\n}};\nconst size_t embutido_overlay_tam = {len(overlay)};\n")
+    print(f"embutido.c: menu {len(png)} B, retratos {len(tiles)} B, fotos {len(fotos)} B, overlay {len(overlay)} B, {len(patches)} patches ({len(blob)} B)")
 
 
 if __name__ == "__main__":

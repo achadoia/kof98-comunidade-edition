@@ -61,6 +61,7 @@ Quer entrar no jogo também, ou tem ideia de personagem, golpe ou modo? Chama no
 - **Sprites sem limite**: nada some em cena cheia (o hardware cortava em 96 por linha).
 - Menu Comunidade Edition com som e **no lugar do MODE SELECT original sempre** (Start no título, saída do OPTION, fim de jogo).
 - **Nenhuma tela do jogo entre o menu e a seleção**: a tela CONTROLS e os logos são pulados atrás do "CARREGANDO".
+- **Fotos dos homenageados em HD** (v1.4.0): na grade de seleção e no rosto ao lado da barra de vida, a foto real do youtuber aparece por cima, nítida em qualquer resolução (F1 → Vídeo liga/desliga). A tela de ordem fica com a arte original.
 - **Qualquer controle** (v1.2.2): Xbox, Switch Pro, PlayStation, 8BitDo... são reconhecidos pelo nome dos botões, então a configuração vale pra todos. Troque de controle e continua funcionando. No F1 → Controles o rodapé mostra o que o controle está mandando na hora.
 - **Menu com F1**: as configurações abrem também por cima do menu inicial. O tema de abertura toca contínuo no menu (a 50%), sem ser cortado.
 - **ORDER SELECT em duas etapas** (v1.3.0): primeiro "ESCOLHA O MODO", com cursor visível em cada um dos 3 personagens
