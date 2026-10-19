@@ -63,9 +63,11 @@ void config_padrao(void)
 {
 	memset(&cfg, 0, sizeof cfg);
 	cfg.filtro = FILTRO_XBR;
-	cfg.proporcao = PROP_4X3;
-	cfg.fundo_borrado = 1;
-	cfg.vsync = 0;          // o áudio comanda o ritmo; vsync derrubava pra ~40 fps e picotava o som
+	// padrão escolhido pelo usuário em 19/10 (tela do F1): tela toda, sem laterais, tela cheia, vsync (o ritmo do monitor já liga o vsync)
+	cfg.proporcao = PROP_ESTICAR;
+	cfg.fundo_borrado = 0;
+	cfg.tela_cheia = 1;
+	cfg.vsync = 1;
 	cfg.volume = 80;
 	cfg.musica_arquivos = 1;
 	cfg.efeitos_arquivos = 1;
@@ -77,7 +79,7 @@ void config_padrao(void)
 	cfg.run_ahead = 1;
 	cfg.ritmo_monitor = 1;
 	cfg.sprites_sem_limite = 1;
-	cfg.ordem_botao = 1;
+	cfg.ordem_botao = 0;
 	cfg.fotos = 1;
 	cfg.atraso_online = 0;
 	config_controles_padrao(0);
