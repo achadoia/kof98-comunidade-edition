@@ -145,7 +145,8 @@
        24,
        24
       ]
-     }
+     },
+     "foto_sem_fundo": "retratos/terry_urameshi_original_hud_sem_fundo.png"
     },
     {
      "onde": "ordem (as 3 posições)",
@@ -410,7 +411,8 @@
        24,
        24
       ]
-     }
+     },
+     "foto_sem_fundo": "retratos/orochi_daimon_original_hud_sem_fundo.png"
     },
     {
      "onde": "ordem (as 3 posições)",
@@ -639,7 +641,8 @@
        24,
        24
       ]
-     }
+     },
+     "foto_sem_fundo": "retratos/toma_saisyu_original_hud_sem_fundo.png"
     },
     {
      "onde": "ordem (as 3 posições)",
@@ -868,7 +871,8 @@
        24
       ]
      },
-     "sem_fundo": true
+     "sem_fundo": true,
+     "foto_sem_fundo": "retratos/ralfecinha_original_hud_sem_fundo.png"
     },
     {
      "onde": "ordem (as 3 posições)",
@@ -1117,7 +1121,8 @@
        24
       ]
      },
-     "sem_fundo": true
+     "sem_fundo": true,
+     "foto_sem_fundo": "retratos/chizurinho_original_hud_sem_fundo.png"
     },
     {
      "onde": "ordem (as 3 posições)",
@@ -1362,7 +1367,8 @@
        24
       ]
      },
-     "sem_fundo": true
+     "sem_fundo": true,
+     "foto_sem_fundo": "retratos/lau_yagami_original_hud_sem_fundo.png"
     },
     {
      "onde": "prévia do P1 segurando Start (Orochi)",
@@ -1431,7 +1437,8 @@
        24,
        24
       ]
-     }
+     },
+     "foto_sem_fundo": "retratos/lau_yagami_orochi_original_hud_sem_fundo.png"
     },
     {
      "onde": "ordem (as 3 posições)",

@@ -105,7 +105,7 @@ static void ritmo_calcula(SDL_Window *win, int tem_som)
 // bin/arte/fotos.bin (tools/retratos.py): u32 n; por foto: u32 tam_png, u16 w, u16 h (tamanho da arte no jogo, px), u8 esp, u8 pad, png.
 // A ordem das fotos é a dos alvos de overlay.bin (video_ovl). O renderizador anota onde cada arte foi pintada; aqui a
 // foto é desenhada por cima, escalada pro tamanho da janela, então fica nítida mesmo em tela cheia.
-typedef struct { SDL_Texture *tex; int w, h, esp; } Foto;
+typedef struct { SDL_Texture *tex; int w, h, esp, inteira; } Foto;
 static Foto fotos[64];
 static int nfotos;
 static SDL_Renderer *ren;
@@ -121,11 +121,11 @@ static void fotos_carrega_bytes(const u8 *d, size_t n)
 		int iw, ih, ic;
 		unsigned char *px = stbi_load_from_memory(d + i, (int)tam, &iw, &ih, &ic, 4);
 		i += tam;
-		fotos[k] = (Foto){NULL, w, h, esp};
+		fotos[k] = (Foto){NULL, w, h, esp & 1, (esp >> 1) & 1};
 		if (!px) { nfotos = (int)k + 1; continue; }
 		SDL_Surface *s = SDL_CreateRGBSurfaceWithFormatFrom(px, iw, ih, 32, iw * 4, SDL_PIXELFORMAT_RGBA32);
 		if (s) { fotos[k].tex = SDL_CreateTextureFromSurface(ren, s); SDL_FreeSurface(s); }
-		if (fotos[k].tex) SDL_SetTextureScaleMode(fotos[k].tex, SDL_ScaleModeLinear);
+		if (fotos[k].tex) { SDL_SetTextureScaleMode(fotos[k].tex, SDL_ScaleModeLinear); SDL_SetTextureBlendMode(fotos[k].tex, SDL_BLENDMODE_BLEND); }
 		stbi_image_free(px);
 		nfotos = (int)k + 1;
 	}
@@ -163,6 +163,7 @@ static void fotos_desenha(const SDL_Rect *r, OvlCaixa (*cx)[2])
 		// só a parte da arte que ficou visível (o resto o jogo cobriu com outro retrato, caixa de modo...)
 		int ix0 = c->vx0 > ox ? c->vx0 : ox, iy0 = c->vy0 > oy ? c->vy0 : oy;
 		int ix1 = c->vx1 < ox + f->w - 1 ? c->vx1 : ox + f->w - 1, iy1 = c->vy1 < oy + f->h - 1 ? c->vy1 : oy + f->h - 1;
+		if (f->inteira) { ix0 = ox; iy0 = oy; ix1 = ox + f->w - 1; iy1 = oy + f->h - 1; }   // cabeça recortada: a caixa toda
 		if (ix1 < ix0 || iy1 < iy0) continue;
 		int tw, th; SDL_QueryTexture(f->tex, NULL, NULL, &tw, &th);
 		int fl = esp ^ f->esp;

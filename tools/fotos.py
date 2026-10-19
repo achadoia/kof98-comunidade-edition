@@ -29,15 +29,26 @@ def main():
         for alvo in r["alvos"]:
             if alvo.get("sem_foto"):
                 continue
-            img = Image.open(os.path.join(ARTE, alvo["imagem"])).convert("RGB") if alvo.get("imagem") else img_padrao
             x0, y0, x1, y1 = alvo["area"]
             w, h = x1 - x0 + 1, y1 - y0 + 1
-            rec = img.crop(tuple(alvo["recorte"]))
-            peq = rec.resize((w * ESCALA, h * ESCALA), Image.LANCZOS)
+            flags = 1 if alvo.get("espelhar") else 0
+            if alvo.get("foto_sem_fundo"):
+                rec = Image.open(os.path.join(ARTE, alvo["foto_sem_fundo"])).convert("RGBA")
+                rec = rec.crop(rec.getbbox())                       # só a cabeça
+                flags |= 2                                          # caixa inteira, sem recorte da parte visível
+                # encaixa na proporção da arte (w x h), centralizado embaixo (a cabeça apoia na base da caixa)
+                esc = min(w * ESCALA / rec.width, h * ESCALA / rec.height)
+                rec = rec.resize((max(1, int(rec.width * esc)), max(1, int(rec.height * esc))), Image.LANCZOS)
+                peq = Image.new("RGBA", (w * ESCALA, h * ESCALA), (0, 0, 0, 0))
+                peq.paste(rec, ((w * ESCALA - rec.width) // 2, h * ESCALA - rec.height), rec)
+            else:
+                img = Image.open(os.path.join(ARTE, alvo["imagem"])).convert("RGB") if alvo.get("imagem") else img_padrao
+                rec = img.crop(tuple(alvo["recorte"]))
+                peq = rec.resize((w * ESCALA, h * ESCALA), Image.LANCZOS)
             buf = io.BytesIO()
             peq.save(buf, format="PNG", optimize=True)
             png = buf.getvalue()
-            fot += struct.pack("<IHHBB", len(png), w, h, 1 if alvo.get("espelhar") else 0, 0) + png
+            fot += struct.pack("<IHHBB", len(png), w, h, flags, 0) + png
             tiles = alvo["tiles"]
             ovl += struct.pack("<I", len(tiles))
             for cod, (ox, oy) in tiles.items():
