@@ -31,7 +31,7 @@ Quer entrar no jogo também, ou tem ideia de personagem, golpe ou modo? Chama no
 - **Menu inicial novo** (Arcade, Team Play, 2P VS, Survival, Practice, Options, Watch), com arte própria.
   Esc no jogo volta pro menu.
 - **Sem lentidão**: CPU do Neo Geo fixa em 200%, o jogo nunca engasga como no fliperama.
-- **Configurações (F1)**: filtros de imagem (nítido, suave, linhas de TV, tubo CRT, fliperama), proporção,
+- **Configurações (F1)**: filtros de imagem (xBR com bordas em curva — o visual padrão —, nítido, suave, linhas de TV, tubo CRT, fliperama), proporção,
   tela cheia, controles remapeáveis por jogador (teclado e qualquer controle, com assistente passo a passo),
   som, escolha de cenário.
 - **Treino avançado (F6)**: hitboxes, boneco P2 (parado, agachado, defendendo, pulando), gravação do
@@ -69,8 +69,19 @@ Quer entrar no jogo também, ou tem ideia de personagem, golpe ou modo? Chama no
   o botão desenhado ao lado de cada retrato (**A** vermelho em cima, **B** amarelo no meio, **C** verde embaixo) escolhe quem começa, em segredo. As colunas ficam congeladas até os dois
   terminarem, então ninguém sabe a ordem do outro.
 
+### Jogo online, sem servidor (v1.5.0)
+- **ONLINE** no menu: um jogador escolhe **CRIAR SALA** e recebe um código de 16 letras (já copiado pra área de
+  transferência); manda pelo WhatsApp. O outro escolhe **ENTRAR COM CÓDIGO**, cola (CTRL+V) e Enter. Os dois PCs
+  se conectam direto, sem servidor nem cadastro: a sala é só o código. Quem cria é o 1P.
+- Netcode por atraso fixo (lockstep): o atraso é calculado pelo ping (ou fixo em F1 → Melhorias) e os dois jogos
+  rodam quadro a quadro iguais; no canto da tela aparece ping e atraso, e um aviso se o estado divergir.
+- Depois da luta o menu volta nos dois; o anfitrião escolhe 2P VS de novo (ou EXIT pra encerrar a sala).
+- Roteador que não deixa entrar? O convidado vê um **código de resposta** pra mandar de volta, e o anfitrião digita
+  na tela da sala: os dois furam o NAT ao mesmo tempo. O anfitrião também tenta abrir a porta por UPnP sozinho.
+  Última saída: Radmin VPN / ZeroTier e digitar `ip:porta` no lugar do código (porta 7998).
+- **Filtro xBR** (padrão): bordas em curva, no estilo dos shaders xBR dos emuladores. F4 troca na hora.
+
 ### Por vir
-- Netplay grátis pra jogar com os streamers.
 - Modo COOP.
 - Cenários do KOF '98 UM.
 - Mais homenagens: manda a sua ideia no WhatsApp.

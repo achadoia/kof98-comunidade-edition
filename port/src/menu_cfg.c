@@ -76,6 +76,7 @@ static void muda(int d)
 		case 3: cfg.dica_treino = !cfg.dica_treino; break;
 		case 4: cfg.run_ahead = (cfg.run_ahead + d + 3) % 3; break;
 		case 5: cfg.ordem_botao = !cfg.ordem_botao; break;
+		case 6: cfg.atraso_online = (cfg.atraso_online + d + 11) % 11; break;
 		}
 	}
 	salva();
@@ -293,6 +294,8 @@ void menu_cfg_desenha(u32 tela[NEO_H][NEO_W])
 		snprintf(v, sizeof v, cfg.run_ahead ? "%d quadro%s" : "desligado", cfg.run_ahead, cfg.run_ahead > 1 ? "s" : "");
 		item(y, 4, "Run-ahead (resposta mais rápida)", v, UI_CINZA); y += 14;
 		item(y, 5, "Ordem do trio por botão (A/B/C)", liga(cfg.ordem_botao), UI_CINZA); y += 14;
+		snprintf(v, sizeof v, cfg.atraso_online ? "%d quadros" : "automático (pelo ping)", cfg.atraso_online);
+		item(y, 6, "Atraso online (anfitrião)", v, UI_CINZA); y += 14;
 		ui_texto(20, y + 4, "Run-ahead: emula à frente e volta; tira", UI_APAGADO);
 		ui_texto(20, y + 14, "1-2 quadros do atraso interno do jogo.", UI_APAGADO);
 		ui_texto(20, y + 26, "Ordem por botão: no ORDER SELECT, A/B/C", UI_APAGADO);

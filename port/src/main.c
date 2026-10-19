@@ -18,6 +18,7 @@
 #include "efeitos.h"
 #include "frontend.h"
 #include "ordem.h"
+#include "rede.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -182,7 +183,11 @@ static const Filtro FILTROS[NFILTROS] = {
 	{0, 90, 0},      // linhas de TV
 	{1, 70, 45},     // tubo CRT
 	{0, 120, 60},    // fliperama
+	{1, 0, 0},       // xBR 4x na CPU (src/xbr.c), depois suavizado na GPU
 };
+void xbr_4x(const u32 *src, u32 *dst, int w, int h);
+static SDL_Texture *tex_xbr;
+static u32 *buf_xbr;
 
 static void prepara_linhas(int intensidade)
 {
@@ -247,15 +252,23 @@ static void apresenta(void)
 	SDL_GetRendererOutputSize(ren, &ow, &oh);
 	SDL_Rect r = area_jogo(ow, oh);
 	const Filtro *f = &FILTROS[cfg.filtro];
-	SDL_UpdateTexture(tex_jogo, NULL, tela, NEO_W * 4);
-	SDL_SetTextureScaleMode(tex_jogo, f->linear ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
+	SDL_Texture *tj = tex_jogo;
+	if (cfg.filtro == FILTRO_XBR) {
+		if (!tex_xbr) { tex_xbr = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, NEO_W * 4, NEO_H * 4); buf_xbr = malloc((size_t)NEO_W * NEO_H * 16 * 4); SDL_SetTextureScaleMode(tex_xbr, SDL_ScaleModeLinear); }
+		xbr_4x(&tela[0][0], buf_xbr, NEO_W, NEO_H);
+		SDL_UpdateTexture(tex_xbr, NULL, buf_xbr, NEO_W * 4 * 4);
+		tj = tex_xbr;
+	} else {
+		SDL_UpdateTexture(tex_jogo, NULL, tela, NEO_W * 4);
+		SDL_SetTextureScaleMode(tex_jogo, f->linear ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
+	}
 	SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
 	SDL_RenderClear(ren);
 	if (cfg.fundo_borrado && (r.w < ow || r.h < oh)) {
 		SDL_UpdateTexture(tex_fundo, NULL, tela, NEO_W * 4);
 		SDL_RenderCopy(ren, tex_fundo, NULL, NULL);
 	}
-	SDL_RenderCopy(ren, tex_jogo, NULL, &r);
+	SDL_RenderCopy(ren, tj, NULL, &r);
 	if (cfg.fotos && nfotos && !cfgmenu_aberto) fotos_desenha(&r, ordem_mostra_congelado() ? ordem_ovl : video_ovl);
 	if (tex_ui) { SDL_UpdateTexture(tex_ui, NULL, tela_ui, NEO_W * 4); SDL_RenderCopy(ren, tex_ui, NULL, &r); }
 	prepara_linhas(f->linhas);
@@ -264,7 +277,7 @@ static void apresenta(void)
 	if (tex_mascara) SDL_RenderCopy(ren, tex_mascara, NULL, &r);
 	SDL_RenderPresent(ren);
 	for (int k = 1; k < ritmo_n; k++) {      // monitor a 120/240 Hz: o mesmo quadro de novo, no vsync seguinte
-		SDL_RenderCopy(ren, tex_jogo, NULL, &r);
+		SDL_RenderCopy(ren, tj, NULL, &r);
 		if (tex_linhas) SDL_RenderCopy(ren, tex_linhas, NULL, &r);
 		if (tex_mascara) SDL_RenderCopy(ren, tex_mascara, NULL, &r);
 		SDL_RenderPresent(ren);
@@ -475,6 +488,7 @@ int main(int argc, char **argv)
 	// ------------------------------------------------------------ janela
 	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
+	rede_init();
 	SDL_Rect util = {0, 0, 1280, 720};
 	SDL_GetDisplayUsableBounds(0, &util);
 	int escala = (util.h * 85 / 100) / NEO_H;
@@ -535,6 +549,7 @@ int main(int argc, char **argv)
 	}
 #ifdef KOF_TESTE
 	{ void frontend_escolhe_teste(int); if (getenv("KOF_MENU_ESCOLHA")) frontend_escolhe_teste(atoi(getenv("KOF_MENU_ESCOLHA"))); }
+	{ void frontend_rede_teste(const char *); if (getenv("KOF_REDE")) frontend_rede_teste(getenv("KOF_REDE")); }
 #endif
 
 	// início rápido: roda o boot da BIOS (logo) sem imagem nem som
@@ -562,10 +577,11 @@ int main(int argc, char **argv)
 			if (getenv("KOF_DEBUG_ENTRADA") && e.type == SDL_KEYDOWN) fprintf(stderr, "tecla %d quadro %u\n", e.key.keysym.scancode, neo_quadros);
 #endif
 			if (frontend_ativo) {          // no menu inicial vale F1 (configurações por cima), Esc (sai), F11/Alt+Enter e F12
+				if (frontend_evento(&e)) continue;
 				if (menu_cfg_evento(&e)) continue;
 				if (e.type == SDL_KEYDOWN && !e.key.repeat) {
 					SDL_Scancode s = e.key.keysym.scancode;
-					if (s == SDL_SCANCODE_ESCAPE) rodando = 0;
+					if (s == SDL_SCANCODE_ESCAPE && !frontend_voltar()) rodando = 0;
 					if (s == SDL_SCANCODE_F11 || (s == SDL_SCANCODE_RETURN && (e.key.keysym.mod & KMOD_ALT))) { cfg.tela_cheia = !cfg.tela_cheia; config_salvar(cfg_arquivo); }
 				}
 				continue;
@@ -583,11 +599,11 @@ int main(int argc, char **argv)
 			case SDL_SCANCODE_ESCAPE: t = TECLA_ESC; break;
 			default: break;
 			}
-			if (t && treino_tecla(t)) continue;
-			if (sc == SDL_SCANCODE_ESCAPE) { if (frontend_tem_arte()) frontend_abre(); else rodando = 0; }   // Esc volta pro menu
+			if (t && !rede_ativa && treino_tecla(t)) continue;
+			if (sc == SDL_SCANCODE_ESCAPE) { if (rede_ativa) rede_desligar(); if (frontend_tem_arte()) frontend_abre(); else rodando = 0; }   // Esc volta pro menu (e sai da sala)
 			if (sc == SDL_SCANCODE_F11 || (sc == SDL_SCANCODE_RETURN && (e.key.keysym.mod & KMOD_ALT))) { cfg.tela_cheia = !cfg.tela_cheia; config_salvar(cfg_arquivo); }
 			if (sc == SDL_SCANCODE_F4) { cfg.filtro = (cfg.filtro + 1) % NFILTROS; config_salvar(cfg_arquivo); }
-			if (sc == SDL_SCANCODE_F3) neo_reset();
+			if (sc == SDL_SCANCODE_F3 && !rede_ativa) neo_reset();
 			if (sc == SDL_SCANCODE_F12) salva_bmp("kof98_foto.bmp");
 		}
 		if (cfg.tela_cheia != cheia_atual) { cheia_atual = cfg.tela_cheia; SDL_SetWindowFullscreen(win, cheia_atual ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0); ritmo_calcula(win, dev != 0); }
@@ -597,12 +613,20 @@ int main(int argc, char **argv)
 		neo_cpu_pct = cfg.cpu;
 		musica_ligada = cfg.musica_arquivos;
 		efeitos_ligados = cfg.efeitos_arquivos;
-		ordem_ligada = cfg.ordem_botao;
+		rede_poll();
+		rede_atraso_cfg = cfg.atraso_online;
+		if (!rede_ativa || rede_anfitriao) rede_ordem = cfg.ordem_botao;
+		ordem_ligada = rede_ativa ? rede_ordem : cfg.ordem_botao;   // na partida online vale a config do anfitrião nos dois lados
 
 		entrada_le();
-		int pausado = !frontend_ativo && (cfgmenu_aberto || treino_aberto || (sem_foco && cfg.pausa_sem_foco));
+		int pausado = !frontend_ativo && !rede_ativa && (cfgmenu_aberto || treino_aberto || (sem_foco && cfg.pausa_sem_foco));   // online nunca pausa (o outro lado esperaria)
 		if (frontend_ativo && !cfgmenu_aberto) frontend_controles(&rodando);
 		int passos = pausado ? 0 : frontend_passos();   // >1 = avanço rápido escondido atrás do menu
+		int rede_parado = 0;
+		if (rede_ativa) { int d = rede_pode(); if (passos > d) passos = d; rede_parado = d == 0; rede_conta_espera(rede_parado); }   // lockstep: só anda com a entrada do outro lado
+#ifdef KOF_TESTE
+		{ static u32 ult; if (getenv("KOF_DEBUG_REDE") && SDL_GetTicks() - ult >= 1000) { ult = SDL_GetTicks(); fprintf(stderr, "rede: estado %d ativa %d quadro %u pode %d ping %d atraso %d espera %d dessinc %d neo %u menu %d | %s\n", rede_estado, rede_ativa, rede_quadro(), rede_pode(), rede_ping, rede_atraso, rede_esperando(), rede_dessincronizou, neo_quadros, frontend_ativo, rede_status()); } }
+#endif
 		int rapido = passos > 1;
 		if (!rapido && !pausado && ritmo_monitor_ativo && dev) {   // vsync dita o ritmo; a fila de som só corrige a deriva
 			double fila_q = SDL_GetQueuedAudioSize(dev) / 4.0 / ((double)AUDIO_TAXA / NEO_HZ);
@@ -614,24 +638,36 @@ int main(int argc, char **argv)
 		Uint64 t_em0 = SDL_GetPerformanceCounter();
 		for (int passo_i = 0; passo_i < passos; passo_i++) {
 			int piloto = frontend_piloto();
-			if (!piloto) config_aplica_entradas();
+			if (rede_ativa) {                     // online: minha entrada vai pro quadro atual+atraso; as dos dois lados vêm do lockstep
+				u8 pp1 = neo_in_p1, pp2 = neo_in_p2, ps = neo_in_start;
+				config_aplica_entradas();
+				u8 mp = (u8)(neo_in_p1 & neo_in_p2), mx = (neo_in_start & 5) != 5 ? REDE_X_START : 0;
+				if (cfgmenu_aberto || frontend_ativo) { mp = 0xff; mx = 0; }
+				u8 p1, x1, p2, x2;
+				rede_passo(mp, mx, &p1, &x1, &p2, &x2);
+				if (x1 & REDE_X_MENU) frontend_escolhe_item(x1 >> 4);
+				if (piloto) { neo_in_p1 = pp1; neo_in_p2 = pp2; neo_in_start = ps; }
+				else { neo_in_p1 = p1; neo_in_p2 = p2; neo_in_start = (u8)(0x0f & ~((x1 & REDE_X_START) ? 1 : 0) & ~((x2 & REDE_X_START) ? 4 : 0)); }
+				neo_in_coin = 0x07; neo_in_test = 1;
+			} else if (!piloto) config_aplica_entradas();
 			if (!piloto && nroteiro) aplica_roteiro();
 #ifdef KOF_TESTE
 			if (getenv("KOF_DEBUG_ENTRADA") && neo_in_start != 0x0f) fprintf(stderr, "start %x quadro %u\n", neo_in_start, neo_quadros);
 #endif
 			if (!piloto && SDL_GetKeyboardState(NULL)[SDL_SCANCODE_F2]) neo_in_test = 0;
-			if (!piloto) treino_entradas();
+			if (!piloto && !rede_ativa) treino_entradas();
 			if (!piloto) ordem_entradas();
-			config_aplica_cenario();
+			if (!rede_ativa) config_aplica_cenario();
 			Uint64 tq = SDL_GetPerformanceCounter();
 			neo_frame();
 			t_neo += TMS(tq); tq = SDL_GetPerformanceCounter();
-			treino_depois_quadro();
+			if (!rede_ativa) treino_depois_quadro();
+			rede_depois_quadro();
 			frontend_vigia();
 			int n = audio_pega_amostras(amostras, 8192);
 			t_mix += TMS(tq); tq = SDL_GetPerformanceCounter();
 			if (rapido) continue;                  // avanço rápido: som descartado
-			if (!piloto && cfg.run_ahead > 0 && !frontend_ativo) run_ahead(cfg.run_ahead);
+			if (!piloto && cfg.run_ahead > 0 && !frontend_ativo && !rede_ativa) run_ahead(cfg.run_ahead);
 			t_ra += TMS(tq);
 			int vol = cfg.mudo ? 0 : cfg.volume;
 			if (vol != 100) for (int i = 0; i < n * 2; i++) amostras[i] = (s16)(amostras[i] * vol / 100);
@@ -665,6 +701,14 @@ int main(int argc, char **argv)
 		ordem_desenha(tela, tela_ui);
 		treino_desenha(tela_ui);
 		menu_cfg_desenha(tela_ui);
+		if (rede_ativa) {
+			char b[48];
+			ui_alvo(tela_ui);
+			snprintf(b, sizeof b, "online %dP  ping %d ms  atraso %d", rede_anfitriao ? 1 : 2, rede_ping, rede_atraso);
+			ui_texto(4, NEO_H - 12, b, 0xff60ff90u);
+			if (rede_esperando() > 15) ui_texto_centro(NEO_H / 2 - 4, "Aguardando o adversário...", 0xffffe060u);
+			if (rede_dessincronizou) ui_texto_centro(NEO_H / 2 + 10, "DESSINCRONIZOU: ESC e crie a sala de novo", 0xffff6060u);
+		}
 		fps_n++;
 		if (SDL_GetTicks() - fps_t >= 1000) {
 			fps = fps_n; fps_n = 0; fps_t = SDL_GetTicks();
@@ -699,6 +743,7 @@ int main(int argc, char **argv)
 			const Uint32 alvo = 4u * (Uint32)((double)AUDIO_TAXA / NEO_HZ * 2);   // ~2 quadros de som na fila
 			Uint64 t0 = SDL_GetPerformanceCounter();
 			while (SDL_GetQueuedAudioSize(dev) > alvo) SDL_Delay(1);
+			if (rede_parado) SDL_Delay(1);      // esperando o outro lado: sem fila de som pra segurar o laço
 			t_espera += (double)(SDL_GetPerformanceCounter() - t0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
 			proximo = (double)SDL_GetPerformanceCounter();
 		} else {
@@ -709,6 +754,7 @@ int main(int argc, char **argv)
 		}
 	}
 	if (!autofoto) config_salvar(cfg_arquivo);   // testes automáticos não mexem na config do usuário
+	rede_fim();
 	SDL_Quit();
 	return 0;
 }

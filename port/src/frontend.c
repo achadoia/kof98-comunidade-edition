@@ -8,10 +8,13 @@
 #include "frontend.h"
 #include "config.h"
 #include "musica.h"
+#include "rede.h"
 extern char font8x8_basic[128][8];   // definida em ui.c (font8x8_basic.h)
+extern char font8x8_ext_latin[96][8];
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #define AW 1672
 #define AH 941
@@ -30,20 +33,26 @@ static u32 *fundo, *tela;     // arte pura / quadro composto (ARGB)
 static int sel = 0, sujo = 1, pisca;
 static u8 antes[8];           // estado anterior das teclas do menu (borda de subida)
 
-// itens: linha, coluna, texto, ação (item do MODE SELECT; -1 = assistir, -2 = sair, -3 = em breve)
+// itens: linha, coluna, texto, ação (item do MODE SELECT; -1 = assistir, -2 = sair, -3 = em breve, -4 = online)
 typedef struct { int linha, col; const char *txt; int modo; } Item;
 static const Item ITENS[] = {
 	{0, 0, "ARCADE PLAY", 2}, {1, 0, "TEAM PLAY", 0}, {1, 1, "2P VS", 1}, {2, 0, "SURVIVAL", 4},
-	{2, 1, "COOP", -3}, {3, 0, "PRACTICE", 5}, {3, 1, "OPTIONS", 6}, {4, 0, "WATCH", -1}, {4, 1, "EXIT", -2},
+	{2, 1, "ONLINE", -4}, {3, 0, "PRACTICE", 5}, {3, 1, "OPTIONS", 6}, {4, 0, "WATCH", -1}, {4, 1, "EXIT", -2},
 };
 #define NITENS (int)(sizeof ITENS / sizeof ITENS[0])
 static const int LINHA_Y[5] = {200, 272, 345, 420, 493};   // centro de cada linha (mockup)
 
 // piloto: 0 desligado, 1 indo pro MODE SELECT, 2 escolhendo, 3 assistindo (sem Start)
 static int piloto, alvo;
+static int rede_escolha_agora;   // 1 = escolha vinda dos quadros da rede (executa de verdade nos dois lados)
 static int cursor_ini;        // item onde o cursor do MODE SELECT estava ao escolher (voltando do OPTION fica no 6)
 static int vigia_n;           // quadros seguidos com o MODE SELECT original na tela
 static u32 q_rel, q_escolha, q_som, q_fim;   // quadros desde que o menu abriu (neo_reset não zera neo_quadros); q_som = confirmação
+// telas do jogo online: 0 nenhuma, 1 submenu, 2 anfitrião (sala criada), 3 convidado digitando, 4 convidado procurando
+static int tela_rede, sub_sel;
+static char digitado[40];
+static u32 t_copiado;
+#define ITEM_2PVS 2
 
 #ifdef KOF_SOLO
 #include "stb_image.h"
@@ -104,8 +113,8 @@ static int texto(int x, int y, const char *s, u32 cor, int esc)
 {
 	for (; *s; s++, x += 8 * esc) {
 		unsigned ch = (unsigned char)*s;
-		if (ch >= 128) continue;
-		const char *g = font8x8_basic[ch];
+		if (ch >= 0xc0 && (s[1] & 0xc0) == 0x80) { ch = ((ch & 0x1f) << 6) | (s[1] & 0x3f); s++; }   // UTF-8 de 2 bytes (acentos)
+		const char *g = ch < 128 ? font8x8_basic[ch] : (ch >= 0xa0 && ch <= 0xff) ? font8x8_ext_latin[ch - 0xa0] : font8x8_basic['?'];
 		for (int gy = 0; gy < 8; gy++)
 			for (int gx = 0; gx < 8; gx++) {
 				int on = (g[gy] >> gx) & 1, neg = gx > 0 && ((g[gy] >> (gx - 1)) & 1);   // negrito: 2 px
@@ -127,16 +136,68 @@ static void seta(int x, int yc, int dir, u32 cor)   // triângulo ◀ (dir -1) o
 		for (int y = yc - (14 - i); y <= yc + (14 - i); y++) mistura(x + dir * i, y, cor, 255);
 }
 
+// ---------------------------------------------------------------- telas do jogo online
+static const char *SUB[] = {"CRIAR SALA", "ENTRAR COM CÓDIGO", "VOLTAR"};
+static void compoe_rede(void)
+{
+	faixa(80, AW - 80, 470, 700, 0xff000000, 215, 215);
+	u32 BR = 0xffffffffu, LAR = 0xffff5a1eu, CZ = 0xffb8b0a8u, VD = 0xff60ff90u, VM = 0xffff6060u;
+	const char *st = rede_status();
+	if (tela_rede == 1) {
+		texto(150, 170, "JOGO ONLINE", LAR, 5);
+		texto(150, 230, "Direto entre os dois PCs, sem servidor. Um cria a sala e manda o código", CZ, 2);
+		texto(150, 254, "pro outro (WhatsApp); o outro entra com o código. Anfitrião = 1P.", CZ, 2);
+		for (int i = 0; i < 3; i++) {
+			int y = 340 + i * 90, e = i == sub_sel;
+			if (e) faixa(110, 900, y, 56, 0xffff4b14, 245, 30);
+			texto(152, y - 16, SUB[i], e ? BR : 0xfff0e6dcu, 4);
+			if (e) { seta(130, y, -1, BR); seta(152 + largura(SUB[i], 4) + 22, y, 1, BR); }
+		}
+		if (rede_estado == REDE_ERRO && rede_msg[0]) texto(150, 640, rede_msg, VM, 2);
+		texto(150, 700, "Pra Radmin VPN / ZeroTier / rede local também dá pra digitar ip:porta no lugar do código.", CZ, 2);
+	} else if (tela_rede == 2) {
+		texto(150, 150, "SALA CRIADA", LAR, 5);
+		if (rede_codigo[0]) {
+			texto(150, 230, "CÓDIGO DA SALA (manda pro seu amigo):", CZ, 2);
+			texto(150, 270, rede_codigo, BR, 7);
+			if (SDL_GetTicks() - t_copiado < 4000) texto(150, 340, "copiado pra área de transferência", VD, 2);
+		}
+		texto(150, 400, st, rede_estado == REDE_ERRO ? VM : CZ, 2);
+		if (rede_estado == REDE_CRIANDO || rede_estado == REDE_PAREANDO) {
+			texto(150, 480, "Não conectou em 20 s? Peça o CÓDIGO DE RESPOSTA que aparece na tela do", CZ, 2);
+			texto(150, 504, "convidado e digite aqui (fura o roteador dos dois lados):", CZ, 2);
+			char b[48]; snprintf(b, sizeof b, "%s%s", digitado, (pisca / 20) & 1 ? "_" : " ");
+			texto(150, 540, b, BR, 4);
+		}
+		texto(150, 660, "ESC cancela a sala", CZ, 2);
+	} else if (tela_rede == 3 || tela_rede == 4) {
+		texto(150, 150, "ENTRAR NA SALA", LAR, 5);
+		texto(150, 230, tela_rede == 3 ? "Digite o código que o anfitrião mandou (CTRL+V cola):" : "Código:", CZ, 2);
+		char b[48]; snprintf(b, sizeof b, "%s%s", digitado, tela_rede == 3 && (pisca / 20) & 1 ? "_" : "");
+		texto(150, 270, b, BR, 6);
+		if (tela_rede == 3) texto(150, 360, "ENTER conecta   ESC volta", CZ, 2);
+		else {
+			texto(150, 400, st, rede_estado == REDE_ERRO ? VM : CZ, 2);
+			if (rede_codigo[0] && rede_estado != REDE_ERRO) {
+				texto(150, 480, "Não conectou? Mande este CÓDIGO DE RESPOSTA pro anfitrião digitar:", CZ, 2);
+				texto(150, 520, rede_codigo, BR, 5);
+			}
+			texto(150, 660, "ESC cancela", CZ, 2);
+		}
+	}
+}
+
 static void compoe(void)
 {
 	memcpy(tela, fundo, AW * AH * 4);
+	if (tela_rede) { compoe_rede(); return; }
 	for (int l = 1; l < 5; l++) {                     // linhas com 2 opções: faixa escura + traço laranja
 		faixa(120, 850, LINHA_Y[l], 56, 0xff07080a, 200, 120);
 		for (int x = 130; x < 850; x++) for (int t = 0; t < 3; t++) mistura(x + 4, LINHA_Y[l] + 30 + t, 0xffff5a1e, 200);
 	}
 	for (int i = 0; i < NITENS; i++) {
 		const Item *it = &ITENS[i];
-		int y = LINHA_Y[it->linha], escolhido = i == sel, emb = it->modo == -3;
+		int y = LINHA_Y[it->linha], escolhido = i == sel, emb = it->modo == -3 || (rede_ativa && i != ITEM_2PVS && it->modo != -2);
 		u32 cor = emb ? 0xff6a6460u : escolhido ? 0xffffffffu : 0xfff0e6dcu;
 		int x = it->col ? 790 - largura(it->txt, 4) : 152;
 		if (escolhido) {
@@ -149,7 +210,11 @@ static void compoe(void)
 		texto(x, y - 16, it->txt, cor, 4);
 		if (emb && escolhido) texto(x + largura(it->txt, 4) - 130, y + 18, "EM BREVE", 0xffffb080u, 2);
 	}
-	texto(60, 40, "SETAS escolhem   A / ENTER confirma   ESC no jogo volta aqui", 0xffb8b0a8u, 2);
+	if (rede_ativa) {
+		char b[160];
+		snprintf(b, sizeof b, rede_anfitriao ? "ONLINE: você é o 1P (ping %d ms). Escolha 2P VS pra lutar; EXIT encerra." : "ONLINE: você é o 2P (ping %d ms). O anfitrião escolhe. ESC sai da sala.", rede_ping);
+		texto(60, 40, b, 0xff60ff90u, 2);
+	} else texto(60, 40, "SETAS escolhem   A / ENTER confirma   ESC no jogo volta aqui", 0xffb8b0a8u, 2);
 	if (piloto == 2) {                                 // avanço rápido acontecendo por trás
 		const char *c = "CARREGANDO...";
 		faixa(560, 1110, 470, 90, 0xff000000, 220, 220);
@@ -174,6 +239,11 @@ static void escolhe(int *rodando)
 {
 	const Item *it = &ITENS[sel];
 	if (it->modo == -3) return;
+	if (it->modo == -4) { tela_rede = 1; sub_sel = 0; sujo = 1; return; }
+	if (rede_ativa && !rede_anfitriao && !rede_escolha_agora) return;        // convidado: só o anfitrião escolhe
+	if (rede_ativa && it->modo == -2) { rede_desligar(); sujo = 1; return; }   // EXIT na sala = sair da sala
+	if (rede_ativa && it->modo != 1) return;
+	if (rede_ativa && !rede_escolha_agora) { if (rede_escolha_pendente < 0) rede_escolha_pendente = sel; return; }   // vai pelos quadros (os dois lados juntos)
 	if (it->modo == -2) { *rodando = 0; return; }
 	if (it->modo == -1) { musica_menu_fim(0); neo_reset(); piloto = 3; frontend_ativo = 0; return; }
 	alvo = it->modo;
@@ -211,7 +281,23 @@ void frontend_controles(int *rodando)
 	};
 	int novo[8];
 	for (int i = 0; i < 8; i++) { novo[i] = agora[i] && !antes[i]; antes[i] = agora[i]; }
+	if (tela_rede == 1) {
+		int s = sub_sel;
+		if (novo[0]) s = (s + 2) % 3;
+		if (novo[1]) s = (s + 1) % 3;
+		if (s != sub_sel) { sub_sel = s; sujo = 1; audio_comando(0x70); }
+		if (novo[4]) {
+			audio_comando(0x71);
+			if (sub_sel == 2) { tela_rede = 0; rede_desligar(); }
+			else if (sub_sel == 0) { digitado[0] = 0; tela_rede = 2; rede_criar(); SDL_StartTextInput(); }
+			else { digitado[0] = 0; tela_rede = 3; SDL_StartTextInput(); }
+			sujo = 1;
+		}
+		return;
+	}
+	if (tela_rede) { sujo = 1; return; }               // telas de digitação: eventos em frontend_evento
 	if (piloto == 2) return;                           // já escolhido: esperando o jogo chegar lá
+	if (rede_ativa && !rede_anfitriao) return;         // convidado só assiste o menu
 	int s = sel;
 	if (novo[0]) s = mover(-1, 0);
 	if (novo[1]) s = mover(1, 0);
@@ -221,6 +307,74 @@ void frontend_controles(int *rodando)
 }
 
 int frontend_tem_arte(void) { return fundo != NULL; }
+
+// teclado nas telas de código (texto digitado, colar, apagar, Enter); 1 = consumiu
+static void digita(const char *p)
+{
+	for (; *p; p++) {
+		char c = (char)toupper((unsigned char)*p);
+		if ((isalnum((unsigned char)c) || c == '-' || c == '.' || c == ':') && strlen(digitado) < sizeof digitado - 1) { size_t n = strlen(digitado); digitado[n] = c; digitado[n + 1] = 0; }
+	}
+}
+int frontend_evento(const SDL_Event *e)
+{
+	if (!frontend_ativo || !(tela_rede == 2 || tela_rede == 3)) return 0;
+	int cab = 0;
+	if (e->type == SDL_TEXTINPUT) { digita(e->text.text); cab = 1; }
+	else if (e->type == SDL_KEYDOWN) {
+		SDL_Scancode s = e->key.keysym.scancode;
+		if (s == SDL_SCANCODE_BACKSPACE) { size_t n = strlen(digitado); if (n) digitado[n - 1] = 0; cab = 1; }
+		else if (s == SDL_SCANCODE_V && (e->key.keysym.mod & KMOD_CTRL)) { char *t = SDL_GetClipboardText(); if (t) { digita(t); SDL_free(t); } cab = 1; }
+		else if (s == SDL_SCANCODE_RETURN || s == SDL_SCANCODE_KP_ENTER) {
+			if (tela_rede == 3 && digitado[0]) { tela_rede = 4; rede_entrar(digitado); cab = 1; }
+			else if (tela_rede == 2 && digitado[0]) { if (!rede_anfitriao_digita(digitado)) snprintf(rede_msg, sizeof rede_msg, "Código de resposta inválido"); cab = 1; }
+		}
+	}
+	if (cab) sujo = 1;
+	return cab;
+}
+
+// Esc no menu: fecha a tela online que estiver aberta (e a sala); 0 = nada aberto (quem chamou decide sair)
+int frontend_voltar(void)
+{
+	if (!frontend_ativo) return 0;
+	if (rede_ativa) { rede_desligar(); sujo = 1; return 1; }
+	if (!tela_rede) return 0;
+	if (tela_rede == 1) tela_rede = 0; else { rede_desligar(); tela_rede = 1; }
+	sujo = 1;
+	return 1;
+}
+
+// chamado pela rede quando os dois lados conectaram: os dois reiniciam o jogo e vão pro 2P VS no mesmo quadro
+void frontend_online_comeca(void)
+{
+	frontend_abre();
+	tela_rede = 0;
+	sel = ITEM_2PVS;
+	rede_escolha_agora = 1; int r = 1; escolhe(&r); rede_escolha_agora = 0;
+}
+void frontend_online_caiu(void)       // o outro lado saiu / conexão perdida
+{
+	if (!frontend_ativo) frontend_abre();
+	piloto = 0; tela_rede = 1; sujo = 1;
+}
+void frontend_escolhe_item(int item)  // escolha do anfitrião chegando pelos quadros (executa nos dois lados)
+{
+	if (item < 0 || item >= NITENS || !frontend_ativo) return;
+	sel = item; sujo = 1;
+	rede_escolha_agora = 1; int r = 1; escolhe(&r); rede_escolha_agora = 0;
+}
+void frontend_copiou(void) { t_copiado = SDL_GetTicks(); }
+
+#ifdef KOF_TESTE
+void frontend_rede_teste(const char *s)   // KOF_REDE=criar | entrar:<código ou ip:porta>
+{
+	if (!frontend_ativo) frontend_abre();
+	if (!strcmp(s, "criar")) { tela_rede = 2; digitado[0] = 0; rede_criar(); }
+	else if (!strncmp(s, "entrar:", 7)) { tela_rede = 4; snprintf(digitado, sizeof digitado, "%s", s + 7); rede_entrar(digitado); }
+	sujo = 1;
+}
+#endif
 
 // O MODE SELECT original nunca fica na tela: sempre que o jogo chega nele por conta própria (Start no título,
 // volta do OPTION, fim de jogo), o nosso menu abre por cima, sem reset, já pronto pra escolher.
@@ -238,7 +392,7 @@ void frontend_vigia(void)
 	sujo = 1;
 	memset(antes, 1, sizeof antes);
 }
-int frontend_passos(void) { return piloto == 2 && q_rel - q_som >= 30 ? 12 : 1; }   // 30 quadros normais: o som de confirmar toca inteiro
+int frontend_passos(void) { return piloto == 2 && q_rel - q_som >= 30 ? (rede_ativa ? 4 : 12) : 1; }   // 30 quadros normais: o som de confirmar toca inteiro
 
 int frontend_piloto(void)
 {
@@ -277,7 +431,9 @@ void frontend_desenha(SDL_Renderer *ren)
 {
 	pisca++;
 	if (!tex) tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, AW, AH);
-	if (sujo || pisca % 20 == 0 || piloto == 2) { compoe(); SDL_UpdateTexture(tex, NULL, tela, AW * 4); sujo = 0; }
+	if (tela_rede == 2 && rede_codigo[0] && !t_copiado) { SDL_SetClipboardText(rede_codigo); t_copiado = SDL_GetTicks(); sujo = 1; }
+	if (tela_rede != 2) t_copiado = 0;
+	if (sujo || pisca % 20 == 0 || piloto == 2 || tela_rede) { compoe(); SDL_UpdateTexture(tex, NULL, tela, AW * 4); sujo = 0; }
 	int ow, oh;
 	SDL_GetRendererOutputSize(ren, &ow, &oh);
 	SDL_Rect r = {0, 0, ow, ow * AH / AW};

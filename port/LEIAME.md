@@ -23,7 +23,7 @@ estado · F7/F8 grava/toca o boneco · F3 reset · F12 foto · Esc sai.
 
 ### Configurações (F1)
 Salvas em `kof98.ini` ao lado do EXE. Abas (Tab, ou LB/RB no controle):
-- **Vídeo**: filtro (nítido, suave, linhas de TV, tubo CRT, fliperama — scanlines e grade RGB feitas na GPU
+- **Vídeo**: filtro (xBR 4x na CPU em 4 threads — `src/xbr.c`, padrão —, nítido, suave, linhas de TV, tubo CRT, fliperama — scanlines e grade RGB feitas na GPU
   por textura em blend multiplicativo), proporção (4:3, pixel inteiro, tela toda), laterais borradas,
   tela cheia, vsync, FPS.
 - **Controles**: por jogador; Enter numa ação grava a próxima tecla/botão/eixo/direcional (Del apaga);
@@ -153,3 +153,21 @@ Referência de hardware: driver Neo Geo do MAME (BSD-3) em `../ref/mame/`.
 3. Extras: Pix na live, mudanças direto no código, widescreen etc.
 
 Build: `./build.sh` (Zig 0.13 em D:\Tools\zig + SDL2 2.30.9 mingw em D:\Tools).
+
+## Jogo online (`src/rede.c`)
+
+Ponto a ponto por UDP (porta 7998+), sem servidor. Código da sala = IP público + porta (STUN em
+`stun.l.google.com`) + IP da rede local, 10 bytes em base32 sem letras ambíguas (16 caracteres). O anfitrião
+tenta abrir a porta por UPnP (SSDP + SOAP, numa thread). Pareamento: os dois mandam `OLA` pros endereços
+candidatos a cada 200 ms; quem recebe responde; PING/PONG mede a latência; o anfitrião manda `INICIO` com o
+atraso (automático = ping/2 em quadros + 1, mínimo 2) e o convidado responde `PRONTO`. Os dois então fazem
+`frontend_online_comeca()`: reset + piloto pro 2P VS no mesmo quadro lógico.
+
+Lockstep com atraso fixo: a entrada local do quadro Q vale pra Q+atraso; cada pacote `ENTRADA` leva as últimas
+entradas (até 64, desde o último ack do outro lado), então perda de pacote não trava. `rede_pode()` diz quantos
+quadros seguidos já têm entrada dos dois; o laço de `main.c` limita `passos` por isso. Byte extra por quadro:
+bit0 Start, bit1 "escolha do menu" (item nos bits 4-7) — assim a escolha do anfitrião no menu entre lutas chega
+nos dois lados no mesmo quadro. A cada 120 quadros vai um hash da RAM de trabalho (0x100000-0x10FFFF); se
+diferir, `rede_dessincronizou` acende o aviso. Na partida: run-ahead, treino, cenário fixo e reset desligados;
+ordem por botão segue a config do anfitrião nos dois lados. Teste local (build KOF_TESTE):
+`KOF_REDE=criar` numa instância e `KOF_REDE=entrar:127.0.0.1:7998` em outra, `KOF_DEBUG_REDE=1` imprime o estado.

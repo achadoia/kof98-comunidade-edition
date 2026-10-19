@@ -8,7 +8,7 @@ enum { LIG_NADA, LIG_TECLA, LIG_BOTAO, LIG_EIXO, LIG_HAT, LIG_GCBOTAO, LIG_GCEIX
 typedef struct { u8 tipo, disp; s16 cod; s8 val; } Ligacao;   // val: sinal do eixo / direção do hat
 #define NLIG 3                                              // até 3 ligações por ação
 
-enum { FILTRO_NITIDO, FILTRO_SUAVE, FILTRO_LINHAS, FILTRO_TUBO, FILTRO_ARCADE, NFILTROS };
+enum { FILTRO_NITIDO, FILTRO_SUAVE, FILTRO_LINHAS, FILTRO_TUBO, FILTRO_ARCADE, FILTRO_XBR, NFILTROS };
 enum { PROP_4X3, PROP_INTEIRA, PROP_ESTICAR, NPROP };
 
 typedef struct {
@@ -23,6 +23,7 @@ typedef struct {
 	int sprites_sem_limite;      // 1 = ignora o limite de 96 sprites por linha (nada some em cena cheia)
 	int ordem_botao;             // 1 = ORDER SELECT por A/B/C com as colunas escondidas do adversário
 	int fotos;                   // 1 = fotos dos homenageados em alta resolução por cima dos retratos
+	int atraso_online;           // quadros de atraso no jogo online: 0 = automático pelo ping (só vale pro anfitrião)
 	Ligacao lig[2][NACOES][NLIG];
 } Config;
 

@@ -19,15 +19,15 @@ compila() { # $1 = compilador, $2 = fonte
 	OBJS="$OBJS $o"
 }
 OBJS=""
-for f in src/main.c ${SOLO:+src/embutido.c} src/neo.c src/video.c src/rom.c src/estado.c src/m68k_estado.c src/treino.c src/ui.c src/config.c src/entrada.c src/menu_cfg.c src/musica.c src/efeitos.c src/frontend.c src/ordem.c src/dec_impl.c \
+for f in src/main.c ${SOLO:+src/embutido.c} src/neo.c src/video.c src/rom.c src/estado.c src/m68k_estado.c src/treino.c src/ui.c src/config.c src/entrada.c src/menu_cfg.c src/musica.c src/efeitos.c src/frontend.c src/ordem.c src/rede.c src/xbr.c src/dec_impl.c \
          $TP/Musashi/m68kcpu.c $TP/Musashi/m68kops.c $TP/Musashi/m68kdasm.c $TP/Musashi/softfloat/softfloat.c \
          $TP/z80/z80.c $TP/miniz/miniz.c; do compila cc "$f"; done
 for f in src/audio.cpp $TP/ymfm/src/ymfm_opn.cpp $TP/ymfm/src/ymfm_adpcm.cpp $TP/ymfm/src/ymfm_ssg.cpp; do compila c++ "$f"; done
 if [ -n "$SOLO" ]; then
 	$ZIG rc kof98.rc && mv -f kof98.res $OBJ/kof98.res   # ícone do EXE (arte/icone.ico); zig rc grava ao lado do .rc
-	$ZIG c++ $ALVO $OBJS $OBJ/kof98.res $SDL/lib/libSDL2.a -lwinmm -limm32 -lole32 -loleaut32 -lversion -luuid -ladvapi32 -lsetupapi -lshell32 -lgdi32 -luser32 -lkernel32 -o bin/$SAIDA
+	$ZIG c++ $ALVO $OBJS $OBJ/kof98.res $SDL/lib/libSDL2.a -lwinmm -limm32 -lole32 -loleaut32 -lversion -luuid -ladvapi32 -lsetupapi -lshell32 -lgdi32 -luser32 -lkernel32 -lws2_32 -o bin/$SAIDA
 else
-	$ZIG c++ $ALVO $OBJS $SDL/lib/libSDL2.dll.a -o bin/${SAIDA:-kof98.exe}
+	$ZIG c++ $ALVO $OBJS $SDL/lib/libSDL2.dll.a -lws2_32 -o bin/${SAIDA:-kof98.exe}
 	cp -u $SDL/bin/SDL2.dll bin/
 fi
 mkdir -p bin/arte   # arte do menu inicial: PNG no git, BMP ao lado do EXE (SDL lê BMP sem biblioteca extra)

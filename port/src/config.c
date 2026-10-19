@@ -9,7 +9,7 @@ u8 acao_ativa[2][NACOES];
 
 const char *NOME_ACAO[NACOES] = {"Cima", "Baixo", "Esquerda", "Direita", "A  soco fraco", "B  chute fraco",
 	"C  soco forte", "D  chute forte", "Start", "Moeda", "A+B  esquiva", "C+D  sopro", "A+B+C  modo MAX"};
-const char *NOME_FILTRO[NFILTROS] = {"nítido", "suave", "linhas de TV", "tubo CRT", "fliperama"};
+const char *NOME_FILTRO[NFILTROS] = {"nítido", "suave", "linhas de TV", "tubo CRT", "fliperama", "xBR (bordas em curva)"};
 const char *NOME_PROP[NPROP] = {"4:3 da TV", "pixel inteiro", "tela toda"};
 const char *NOME_CENARIO[NCENARIOS] = {"rua com carros", "rio e montanhas", "porto", "mercado árabe",
 	"palácio espanhol", "ferrovia", "santuário", "festa com ônibus", "templo do chefe"};
@@ -62,7 +62,7 @@ void config_controles_padrao(int j)
 void config_padrao(void)
 {
 	memset(&cfg, 0, sizeof cfg);
-	cfg.filtro = FILTRO_LINHAS;
+	cfg.filtro = FILTRO_XBR;
 	cfg.proporcao = PROP_4X3;
 	cfg.fundo_borrado = 1;
 	cfg.vsync = 0;          // o áudio comanda o ritmo; vsync derrubava pra ~40 fps e picotava o som
@@ -79,6 +79,7 @@ void config_padrao(void)
 	cfg.sprites_sem_limite = 1;
 	cfg.ordem_botao = 1;
 	cfg.fotos = 1;
+	cfg.atraso_online = 0;
 	config_controles_padrao(0);
 	config_controles_padrao(1);
 }
@@ -136,7 +137,7 @@ int config_salvar(const char *arq)
 	fprintf(f, "volume=%d\nmudo=%d\npausa_sem_foco=%d\ninicio_rapido=%d\ndica_treino=%d\ncenario=%d\n",
 		cfg.volume, cfg.mudo, cfg.pausa_sem_foco, cfg.inicio_rapido, cfg.dica_treino, cfg.cenario);
 	fprintf(f, "musica_arquivos=%d\nefeitos_arquivos=%d\n", cfg.musica_arquivos, cfg.efeitos_arquivos);
-	fprintf(f, "run_ahead=%d\nritmo_monitor=%d\nsprites_sem_limite=%d\nordem_botao=%d\nfotos=%d\n", cfg.run_ahead, cfg.ritmo_monitor, cfg.sprites_sem_limite, cfg.ordem_botao, cfg.fotos);
+	fprintf(f, "run_ahead=%d\nritmo_monitor=%d\nsprites_sem_limite=%d\nordem_botao=%d\nfotos=%d\natraso_online=%d\n", cfg.run_ahead, cfg.ritmo_monitor, cfg.sprites_sem_limite, cfg.ordem_botao, cfg.fotos, cfg.atraso_online);
 	for (int j = 0; j < 2; j++)
 		for (int a = 0; a < NACOES; a++) {
 			fprintf(f, "p%d.%s=", j + 1, CHAVE_ACAO[a]);
@@ -213,6 +214,7 @@ int config_carregar(const char *arq)
 		else if (!strcmp(linha, "sprites_sem_limite")) cfg.sprites_sem_limite = n;
 		else if (!strcmp(linha, "ordem_botao")) cfg.ordem_botao = n;
 		else if (!strcmp(linha, "fotos")) cfg.fotos = n;
+		else if (!strcmp(linha, "atraso_online")) cfg.atraso_online = n < 0 ? 0 : n > 10 ? 10 : n;
 		else if (linha[0] == 'p' && (linha[1] == '1' || linha[1] == '2') && linha[2] == '.') {
 			int j = linha[1] - '1';
 			for (int a = 0; a < NACOES; a++) {
