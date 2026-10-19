@@ -315,6 +315,9 @@ void frontend_controles(int *rodando)
 		sujo = 1;
 		if (atualiza_estado == ATU_PRONTA) { if (atualiza_aplicar()) *rodando = 0; return; }   // reinicia sozinho
 		if (novo[4] && atualiza_estado == ATU_NOVA) { audio_comando(0x71); atualiza_baixar(); }
+#ifdef KOF_TESTE
+		if (getenv("KOF_ATUALIZA_AUTO") && atualiza_estado == ATU_NOVA) atualiza_baixar();
+#endif
 		return;
 	}
 	if (tela_rede == 1) {
