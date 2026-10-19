@@ -1,11 +1,14 @@
-// Tela de configurações (F1): abas Vídeo, Controles, Som e Melhorias. Desenhada por cima do jogo pausado.
+// Tela de configurações (F1): abas Vídeo, Controles, Som e Melhorias. Desenhada em alta resolução (1672x941,
+// src/hd.c) por cima do jogo pausado, com a arte arte/hd_cfg_fundo.png de fundo. Navega com as setas, com as
+// teclas/botões configurados dos 2 jogadores e com os botões fixos do controle (entrada_evento_menu).
 #include "menu_cfg.h"
 #include "config.h"
 #include "entrada.h"
-#include "ui.h"
+#include "hd.h"
 #include "musica.h"
 #include "efeitos.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 int cfgmenu_aberto;
@@ -16,7 +19,7 @@ static char aviso_txt[80];
 static u32 aviso_t;
 extern char cfg_arquivo[512];
 
-static const char *ABAS[] = {"Vídeo", "Controles", "Som", "Melhorias"};
+static const char *ABAS[] = {"VÍDEO", "CONTROLES", "SOM", "MELHORIAS"};
 #define NABAS 4
 
 static const char *liga(int v) { return v ? "ligado" : "desligado"; }
@@ -28,7 +31,7 @@ static int linhas_aba(void)
 	case 0: return 9;
 	case 1: return 3 + NACOES;     // jogador, assistente, ações..., restaurar
 	case 2: return 5;
-	default: return 6;
+	default: return 7;
 	}
 }
 
@@ -145,131 +148,166 @@ int menu_cfg_evento(const SDL_Event *e)
 		return 1;
 	}
 
-	int t = 0;     // 1 cima 2 baixo 3 esq 4 dir 5 ok 6 voltar
-	if (e->type == SDL_KEYDOWN) {
-		switch (e->key.keysym.scancode) {
-		case SDL_SCANCODE_UP: t = 1; break; case SDL_SCANCODE_DOWN: t = 2; break;
-		case SDL_SCANCODE_LEFT: t = 3; break; case SDL_SCANCODE_RIGHT: t = 4; break;
-		case SDL_SCANCODE_RETURN: case SDL_SCANCODE_Z: t = 5; break;
-		case SDL_SCANCODE_ESCAPE: t = 6; break;
-		case SDL_SCANCODE_TAB: aba = (aba + 1) % NABAS; linha = 0; return 1;
-		default: break;
-		}
-	} else if (e->type == SDL_JOYHATMOTION && !entrada_instancia_reconhecida(e->jhat.which)) {
-		int v = e->jhat.value;
-		t = v == SDL_HAT_UP ? 1 : v == SDL_HAT_DOWN ? 2 : v == SDL_HAT_LEFT ? 3 : v == SDL_HAT_RIGHT ? 4 : 0;
-	} else if (e->type == SDL_JOYBUTTONDOWN && !entrada_instancia_reconhecida(e->jbutton.which)) {
-		int b = e->jbutton.button;
-		t = b == 0 ? 5 : b == 1 ? 6 : 0;
-		if (b == 4) { aba = (aba + NABAS - 1) % NABAS; linha = 0; return 1; }
-		if (b == 5) { aba = (aba + 1) % NABAS; linha = 0; return 1; }
-	} else if (e->type == SDL_CONTROLLERBUTTONDOWN) {
-		int b = e->cbutton.button;
-		t = b == SDL_CONTROLLER_BUTTON_DPAD_UP ? 1 : b == SDL_CONTROLLER_BUTTON_DPAD_DOWN ? 2 : b == SDL_CONTROLLER_BUTTON_DPAD_LEFT ? 3 :
-		    b == SDL_CONTROLLER_BUTTON_DPAD_RIGHT ? 4 : b == SDL_CONTROLLER_BUTTON_A ? 5 : b == SDL_CONTROLLER_BUTTON_B ? 6 : 0;
-		if (b == SDL_CONTROLLER_BUTTON_LEFTSHOULDER) { aba = (aba + NABAS - 1) % NABAS; linha = 0; return 1; }
-		if (b == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) { aba = (aba + 1) % NABAS; linha = 0; return 1; }
-	}
+	int t = entrada_evento_menu(e);
 	int n = linhas_aba();
+#ifdef KOF_TESTE
+	if (getenv("KOF_DEBUG_ENTRADA") && t) fprintf(stderr, "menu F1: evento %d -> comando %d (aba %d linha %d)\n", e->type, t, aba, linha);
+#endif
 	switch (t) {
-	case 1: linha = linha <= -1 ? -1 : linha - 1; break;                 // -1 = barra de abas
-	case 2: linha = linha + 1 >= n ? n - 1 : linha + 1; break;
-	case 3: if (linha < 0) aba = (aba + NABAS - 1) % NABAS; else muda(-1); break;
-	case 4: if (linha < 0) aba = (aba + 1) % NABAS; else muda(1); break;
-	case 5: if (linha < 0) linha = 0; else confirma(); break;
-	case 6: cfgmenu_aberto = 0; salva(); break;
+	case MENU_CIMA: linha = linha <= -1 ? -1 : linha - 1; break;                 // -1 = barra de abas
+	case MENU_BAIXO: linha = linha + 1 >= n ? n - 1 : linha + 1; break;
+	case MENU_ESQ: if (linha < 0) aba = (aba + NABAS - 1) % NABAS; else muda(-1); break;
+	case MENU_DIR: if (linha < 0) aba = (aba + 1) % NABAS; else muda(1); break;
+	case MENU_OK: if (linha < 0) linha = 0; else confirma(); break;
+	case MENU_VOLTAR: cfgmenu_aberto = 0; salva(); break;
+	case MENU_ABA_ANT: aba = (aba + NABAS - 1) % NABAS; linha = 0; break;
+	case MENU_ABA_SEG: aba = (aba + 1) % NABAS; linha = 0; break;
 	}
 	return 1;
 }
 
-// desenho -----------------------------------------------------------------------
-static void item(int y, int i, const char *nome, const char *valor, u32 cor_nome)
+// desenho em 1672x941 ---------------------------------------------------------------
+#define C_BRANCO 0xf4f4f4u
+#define C_CINZA 0xe4e4e4u
+#define C_APAGADO 0xc0c0c0u
+#define C_LARANJA 0xf08a1eu
+#define C_VERMELHO 0xc8281au
+#define C_AMARELO 0xffd020u
+#define C_VERDE 0x40ff70u
+#define X_NOME 95
+#define X_VALOR 1000
+#define X_PAINEL1 1032
+
+static char maiu[160];
+static const char *M(const char *s) { hd_maiusc(maiu, s, sizeof maiu); return maiu; }
+
+// uma linha de opção: nome à esquerda, valor à direita (com setas quando selecionada)
+static void item(int y, int i, const char *nome, const char *valor, int passo)
 {
-	int sel = i == linha;
-	if (sel) ui_caixa(14, y - 2, NEO_W - 15, y + 8, UI_CIANO, 60);
-	ui_texto(20, y, nome, sel ? UI_BRANCO : cor_nome);
-	if (valor) {
-		char b[48];
-		snprintf(b, sizeof b, sel ? "< %s >" : "%s", valor);
-		ui_texto(NEO_W - 20 - ui_largura(b), y, b, sel ? UI_AMARELO : 0xffe0e0e0u);
+	int sel = i == linha, alt = passo - 7, yc = y + 12;
+	if (sel) hd_degrade(48, yc - alt / 2, X_PAINEL1, yc + alt / 2, 0xd93a1cu, 0xf29a1au, 255, 10);
+	else hd_caixa(80, yc + alt / 2 + 2, X_VALOR + 10, yc + alt / 2 + 3, 0x8a3018u, 140);
+	hd_texto(X_NOME, y, M(nome), sel ? C_BRANCO : C_CINZA, 3);
+	if (!valor) return;
+	char v[96];
+	snprintf(v, sizeof v, "%s", M(valor));
+	int fim_nome = X_NOME + hd_largura(M(nome), 3) + 30, esc = 3;
+	if (sel) {
+		if (X_VALOR - 48 - hd_largura(v, 3) < fim_nome) esc = 2;        // valor comprido: letra menor pra não invadir o nome
+		int w = hd_largura(v, esc), x0 = X_VALOR - 28 - w;
+		hd_texto(x0, y + (esc == 2 ? 4 : 0), v, C_BRANCO, esc);
+		hd_seta(x0 - 20, yc, -1, 11, C_BRANCO);
+		hd_seta(X_VALOR - 14, yc, 1, 11, C_BRANCO);
+	} else {
+		if (X_VALOR - hd_largura(v, 3) < fim_nome) esc = 2;
+		hd_texto_dir(X_VALOR, y + (esc == 2 ? 4 : 0), v, C_CINZA, esc);
 	}
 }
 
-void menu_cfg_desenha(u32 tela[NEO_H][NEO_W])
+static int ajuda(int y, const char *s, u32 cor) { hd_texto(X_NOME, y, M(s), cor, 3); return y + 35; }
+
+static void abas(void)
+{
+	int x = 60, y0 = 145, y1 = 195;
+	for (int i = 0; i < NABAS; i++) {
+		int w = hd_largura(ABAS[i], 3) + 100, ativa = i == aba;
+		if (ativa) {
+			hd_degrade(x, y0, x + w, y1, 0xd8341cu, 0xe8701eu, 255, 14);
+			if (linha < 0) hd_caixa(x, y1 - 5, x + w + 14, y1, C_AMARELO, 255);   // foco na barra de abas
+		} else {
+			hd_caixa(x, y0, x + w, y1, 0x141418u, 225);
+			hd_borda(x, y0, x + w, y1, 0xc8c8c8u, 2);
+		}
+		hd_texto(x + 50 + (ativa ? 8 : 0), y0 + 13, ABAS[i], ativa ? C_BRANCO : C_CINZA, 3);
+		x += w + 10;
+	}
+}
+
+static void rodape(const char *esq, const char *dir)
+{
+	hd_caixa(0, 852, HD_W, HD_H, 0x06070cu, 235);
+	hd_caixa(0, 849, HD_W, 852, C_VERMELHO, 255);
+	int x = 600;
+	hd_imagem(x, 862, &hd_dpad); x += hd_dpad.w + 14;
+	x = hd_texto(x, 876, esq, C_BRANCO, 3) + 70;
+	hd_imagem(x, 864, &hd_botao_b); x += hd_botao_b.w + 14;
+	hd_texto(x, 876, dir, C_BRANCO, 3);
+}
+
+void menu_cfg_desenha_hd(void)
 {
 	if (!cfgmenu_aberto) return;
-	ui_alvo(tela);
-	ui_caixa(0, 0, NEO_W - 1, NEO_H - 1, 0xff05070cu, 228);
-	ui_texto(10, 6, "CONFIGURAÇÕES", UI_CIANO);
-	ui_texto(NEO_W - 10 - ui_largura("F1 fecha"), 6, "F1 fecha", UI_APAGADO);
+	u32 *buf = hd_buffer();
+	if (hd_cfg_fundo.px && hd_cfg_fundo.w == HD_W && hd_cfg_fundo.h == HD_H) memcpy(buf, hd_cfg_fundo.px, (size_t)HD_W * HD_H * 4);
+	else { hd_caixa(0, 0, HD_W, HD_H, 0x05070cu, 255); hd_texto(60, 40, "CONFIGURAÇÕES", C_LARANJA, 6); }
+	hd_texto_dir(1640, 28, "F1  FECHA", C_BRANCO, 3);
+	abas();
+	// moldura do painel: linha fina à esquerda e embaixo, canto cortado
+	hd_caixa(46, 240, 48, 828, 0xb8321au, 210);
+	for (int i = 0; i < 18; i++) hd_caixa(46 + i, 828 + i, 48 + i, 830 + i, 0xb8321au, 210);
+	hd_caixa(64, 846, 1058, 848, 0xb8321au, 210);
 
-	// abas como pílulas
-	int x = 10;
-	for (int i = 0; i < NABAS; i++) {
-		int w = ui_largura(ABAS[i]) + 12;
-		int ativa = i == aba;
-		if (ativa) ui_caixa(x, 19, x + w, 31, UI_CIANO, linha < 0 ? 255 : 170);
-		else ui_retangulo(x, 19, x + w, 31, 0xff3a4250u, 0);
-		ui_texto(x + 6, 22, ABAS[i], ativa ? 0xff0a0d14u : UI_CINZA);
-		x += w + 6;
-	}
-
-	char v[48];
-	int y = 40;
+	char v[64];
+	int y = 243;
 	switch (aba) {
 	case 0:
-		item(y, 0, "Filtro de imagem", NOME_FILTRO[cfg.filtro], UI_CINZA); y += 14;
-		item(y, 1, "Proporção", NOME_PROP[cfg.proporcao], UI_CINZA); y += 14;
-		item(y, 2, "Laterais borradas", liga(cfg.fundo_borrado), UI_CINZA); y += 14;
-		item(y, 3, "Tela cheia  (F11)", liga(cfg.tela_cheia), UI_CINZA); y += 14;
-		item(y, 4, "Sincronia vertical (vsync)", liga(cfg.vsync), UI_CINZA); y += 14;
-		item(y, 5, "Mostrar FPS", liga(cfg.mostra_fps), UI_CINZA); y += 14;
+		item(y, 0, "Filtro de imagem", NOME_FILTRO[cfg.filtro], 47); y += 47;
+		item(y, 1, "Proporção", NOME_PROP[cfg.proporcao], 47); y += 47;
+		item(y, 2, "Laterais borradas", liga(cfg.fundo_borrado), 47); y += 47;
+		item(y, 3, "Tela cheia  (F11)", liga(cfg.tela_cheia), 47); y += 47;
+		item(y, 4, "Sincronia vertical (vsync)", liga(cfg.vsync), 47); y += 47;
+		item(y, 5, "Mostrar FPS", liga(cfg.mostra_fps), 47); y += 47;
 		{ extern int ritmo_monitor_ativo; extern double ritmo_monitor_hz;
 		  if (!cfg.ritmo_monitor) snprintf(v, sizeof v, "desligado (59,19 Hz)");
-		  else if (ritmo_monitor_ativo) snprintf(v, sizeof v, "%.0f Hz do monitor", ritmo_monitor_hz);
-		  else snprintf(v, sizeof v, "ligado (monitor incompatível)"); }
-		item(y, 6, "Ritmo do monitor", v, UI_CINZA); y += 14;
-		item(y, 7, "Sprites sem limite por linha", liga(cfg.sprites_sem_limite), UI_CINZA); y += 14;
-		item(y, 8, "Fotos dos homenageados em HD", liga(cfg.fotos), UI_CINZA); y += 14;
-		ui_texto(20, y + 6, "F4 troca o filtro durante o jogo.", UI_APAGADO);
-		ui_texto(20, y + 18, "Ritmo do monitor: o jogo roda a 60 Hz", UI_APAGADO);
-		ui_texto(20, y + 28, "(1,4% mais rápido) casado com o vsync,", UI_APAGADO);
-		ui_texto(20, y + 38, "sem o engasgo de 59,19 Hz na tela de 60.", UI_APAGADO);
+		  else if (ritmo_monitor_ativo) snprintf(v, sizeof v, "%.0f Hz", ritmo_monitor_hz);
+		  else snprintf(v, sizeof v, "monitor incompatível"); }
+		item(y, 6, "Ritmo do monitor", v, 47); y += 47;
+		item(y, 7, "Sprites sem limite", liga(cfg.sprites_sem_limite), 47); y += 47;
+		item(y, 8, "Fotos dos homenageados em HD", liga(cfg.fotos), 47); y += 47;
+		y += 22;
+		{ int x = hd_texto(X_NOME, y, "F4", C_LARANJA, 3); hd_texto(x + 36, y, "TROCA O FILTRO DURANTE O JOGO", C_BRANCO, 3); y += 42; }
+		y = ajuda(y, "Ritmo do monitor: o jogo roda a 60 Hz", C_APAGADO);
+		y = ajuda(y, "(1,4% mais rápido) casado com o vsync,", C_APAGADO);
+		y = ajuda(y, "sem o engasgo de 59,19 Hz na tela de 60.", C_APAGADO);
 		break;
 	case 1: {
+		int passo = 31;
 		snprintf(v, sizeof v, "jogador %d  (%d ctrl)", jogador + 1, entrada_num_controles());
-		item(y, 0, "Editando", v, UI_CINZA); y += 12;
-		item(y, 1, "Configurar tudo (passo a passo)", NULL, UI_CIANO); y += 12;
+		item(y, 0, "Editando", v, passo); y += passo;
+		item(y, 1, "Configurar tudo (passo a passo)", NULL, passo); y += passo;
 		for (int a = 0; a < NACOES; a++) {
-			int i = 2 + a, sel = i == linha;
-			if (sel) ui_caixa(14, y - 2, NEO_W - 15, y + 8, UI_CIANO, 60);
-			int ativa = acao_ativa[jogador][a];
-			if (ativa) ui_caixa(16, y - 1, 18, y + 7, 0xff40ff70u, 255);
-			ui_texto(22, y, NOME_ACAO[a], capturando == a ? UI_AMARELO : ativa ? 0xff60ff90u : sel ? UI_BRANCO : UI_CINZA);
-			char d1[32] = "", d2[32] = "", tudo[64];
+			int i = 2 + a, sel = i == linha, ativa = acao_ativa[jogador][a];
+			char d1[32] = "", d2[32] = "", tudo[80];
 			const Ligacao *L = cfg.lig[jogador][a];
 			config_descreve(&L[0], d1, sizeof d1);
 			config_descreve(L[1].tipo ? &L[1] : &L[2], d2, sizeof d2);
 			if (capturando == a) snprintf(tudo, sizeof tudo, "aperte...");
-			else snprintf(tudo, sizeof tudo, "%s | %s", d1, d2);
-			if ((int)strlen(tudo) > 20) tudo[20] = 0;
-			ui_texto(NEO_W - 18 - ui_largura(tudo), y, tudo, capturando == a ? UI_AMARELO : 0xffd0d6e0u);
-			y += 10;
+			else snprintf(tudo, sizeof tudo, "%s / %s", d1, d2);
+			if ((int)strlen(tudo) > 26) tudo[26] = 0;
+			item(y, i, NOME_ACAO[a], tudo, passo);
+			if (ativa) hd_caixa(62, y + 2, 80, y + 22, C_VERDE, 255);                       // apertado agora
+			if (capturando == a) hd_texto(X_NOME, y, M(NOME_ACAO[a]), C_AMARELO, 3);
+			else if (ativa && !sel) hd_texto(X_NOME, y, M(NOME_ACAO[a]), C_VERDE, 3);
+			y += passo;
 		}
-		item(y + 2, 2 + NACOES, "Restaurar padrão", NULL, UI_CINZA);
+		item(y, 2 + NACOES, "Restaurar padrão", NULL, passo);
 		break;
 	}
 	case 2:
 		snprintf(v, sizeof v, "%d%%", cfg.volume);
-		item(y, 0, "Volume", v, UI_CINZA); y += 14;
-		item(y, 1, "Mudo", liga(cfg.mudo), UI_CINZA); y += 14;
-		item(y, 2, "Músicas da pasta som/musica", liga(cfg.musica_arquivos), UI_CINZA); y += 14;
-		item(y, 3, "Vozes/efeitos de som/efeitos", liga(cfg.efeitos_arquivos), UI_CINZA); y += 14;
+		item(y, 0, "Volume", v, 47); y += 47;
+		item(y, 1, "Mudo", liga(cfg.mudo), 47); y += 47;
+		item(y, 2, "Músicas da pasta som/musica", liga(cfg.musica_arquivos), 47); y += 47;
+		item(y, 3, "Vozes/efeitos de som/efeitos", liga(cfg.efeitos_arquivos), 47); y += 47;
 		snprintf(v, sizeof v, "%d + %d arquivos", musica_quantas(), efeitos_quantos());
-		item(y, 4, "Reler as pastas", v, UI_CINZA); y += 14;
-		for (int i = 0; i < 10; i++)
-			ui_caixa(20 + i * 14, y + 4, 30 + i * 14, y + 14, i * 10 < cfg.volume && !cfg.mudo ? UI_CIANO : 0xff2a303cu, 255);
-		y += 24;
+		item(y, 4, "Reler as pastas", v, 47); y += 47;
+		y += 12;
+		for (int i = 0; i < 10; i++) {
+			int on = i * 10 < cfg.volume && !cfg.mudo;
+			if (on) hd_degrade(X_NOME + i * 46, y, X_NOME + i * 46 + 38, y + 30, 0xd93a1cu, 0xf29a1au, 255, 0);
+			else hd_caixa(X_NOME + i * 46, y, X_NOME + i * 46 + 38, y + 30, 0x2a2a30u, 255);
+		}
+		y += 52;
 		{   // qual música está tocando: ajuda a saber que arquivo trocar
 			extern int musica_ultima_cod;
 			int c = musica_ultima_cod;
@@ -279,54 +317,53 @@ void menu_cfg_desenha(u32 tela[NEO_H][NEO_W])
 				const char *n = strrchr(arq, '/');
 				snprintf(v, sizeof v, "Tocando: %02X  %s", c, n ? n + 1 : arq);
 			} else snprintf(v, sizeof v, "Tocando: %02X  (chip original)", c);
-			if ((int)strlen(v) > 46) v[46] = 0;
-			ui_texto(20, y, v, UI_AMARELO);
+			if ((int)strlen(v) > 38) v[38] = 0;
+			hd_texto(X_NOME, y, M(v), C_AMARELO, 3); y += 42;
 		}
-		ui_texto(20, y + 14, "Pra trocar: .ogg .mp3 ou .wav em", UI_APAGADO);
-		ui_texto(20, y + 24, "som/musica, com o nome começando", UI_APAGADO);
-		ui_texto(20, y + 34, "pelo código (ex.: \"28 rock.mp3\").", UI_APAGADO);
+		y = ajuda(y, "Pra trocar: .ogg .mp3 ou .wav em", C_APAGADO);
+		y = ajuda(y, "som/musica, com o nome começando", C_APAGADO);
+		y = ajuda(y, "pelo código (ex.: \"28 rock.mp3\").", C_APAGADO);
 		break;
 	default:
-		item(y, 0, "Cenário", config_nome_cenario(cfg.cenario), UI_CINZA); y += 14;
-		item(y, 1, "Pausar sem foco", liga(cfg.pausa_sem_foco), UI_CINZA); y += 14;
-		item(y, 2, "Início rápido (pula o logo)", liga(cfg.inicio_rapido), UI_CINZA); y += 14;
-		item(y, 3, "Dica do F6 ao iniciar", liga(cfg.dica_treino), UI_CINZA); y += 14;
+		item(y, 0, "Cenário", config_nome_cenario(cfg.cenario), 47); y += 47;
+		item(y, 1, "Pausar sem foco", liga(cfg.pausa_sem_foco), 47); y += 47;
+		item(y, 2, "Início rápido (pula o logo)", liga(cfg.inicio_rapido), 47); y += 47;
+		item(y, 3, "Dica do F6 ao iniciar", liga(cfg.dica_treino), 47); y += 47;
 		snprintf(v, sizeof v, cfg.run_ahead ? "%d quadro%s" : "desligado", cfg.run_ahead, cfg.run_ahead > 1 ? "s" : "");
-		item(y, 4, "Run-ahead (resposta mais rápida)", v, UI_CINZA); y += 14;
-		item(y, 5, "Ordem do trio por botão (A/B/C)", liga(cfg.ordem_botao), UI_CINZA); y += 14;
-		snprintf(v, sizeof v, cfg.atraso_online ? "%d quadros" : "automático (pelo ping)", cfg.atraso_online);
-		item(y, 6, "Atraso online (anfitrião)", v, UI_CINZA); y += 14;
-		ui_texto(20, y + 4, "Run-ahead: emula à frente e volta; tira", UI_APAGADO);
-		ui_texto(20, y + 14, "1-2 quadros do atraso interno do jogo.", UI_APAGADO);
-		ui_texto(20, y + 26, "Ordem por botão: no ORDER SELECT, A/B/C", UI_APAGADO);
-		ui_texto(20, y + 36, "= 1º/2º/3º escolhido começa; o adversário", UI_APAGADO);
-		ui_texto(20, y + 46, "não vê. <> muda ADV/EXTRA/SPECIAL, A ok.", UI_APAGADO);
+		item(y, 4, "Run-ahead (resposta rápida)", v, 47); y += 47;
+		item(y, 5, "Ordem do trio por botão", liga(cfg.ordem_botao), 47); y += 47;
+		snprintf(v, sizeof v, cfg.atraso_online ? "%d quadros" : "auto (pelo ping)", cfg.atraso_online);
+		item(y, 6, "Atraso online (anfitrião)", v, 47); y += 47;
+		y += 22;
+		y = ajuda(y, "Run-ahead: emula à frente e volta,", C_APAGADO);
+		y = ajuda(y, "tira 1-2 quadros do atraso do jogo.", C_APAGADO);
+		y = ajuda(y, "Ordem por botão: no ORDER SELECT,", C_APAGADO);
+		y = ajuda(y, "A/B/C = 1º/2º/3º escolhido começa", C_APAGADO);
+		y = ajuda(y, "(o adversário não vê).", C_APAGADO);
 		break;
 	}
 
-	// rodapé
-	char lin[96];
+	rodape("SELECIONAR", "VOLTAR");
 	if (aba == 1 && capturando < 0) {   // o que o controle está mandando agora: mostra na hora se ele é reconhecido e se os botões chegam
-		char est[64];
+		char est[64], lin[128];
 		entrada_estado_texto(jogador, est, sizeof est);
-		snprintf(lin, sizeof lin, "c%d %s: %s", jogador + 1, entrada_num_controles() > jogador ? (entrada_reconhecido(jogador) ? "ok" : "cru") : "-", est);
-		if ((int)strlen(lin) > 44) lin[44] = 0;
+		snprintf(lin, sizeof lin, "controle %d %s: %s", jogador + 1, entrada_num_controles() > jogador ? (entrada_reconhecido(jogador) ? "ok" : "cru") : "-", est);
+		if ((int)strlen(lin) > 58) lin[58] = 0;
+		hd_texto(X_NOME, 808, M(lin), C_VERDE, 2);
 	}
-	const char *dica = capturando >= 0 ? "Esc pula   Del apaga" : aba == 1 ? lin : "^v escolhe   <> muda   Tab muda aba";
-	ui_caixa(0, NEO_H - 14, NEO_W - 1, NEO_H - 1, 0xff0a0d14u, 230);
-	ui_texto_centro(NEO_H - 11, dica, UI_APAGADO);
 	if (capturando >= 0) {
-		char b[80];
+		char b[96];
 		snprintf(b, sizeof b, "P%d: aperte para  %s", jogador + 1, NOME_ACAO[capturando]);
-		int w = ui_largura(b) + 20;
-		ui_caixa((NEO_W - w) / 2, 96, (NEO_W + w) / 2, 124, UI_FUNDO, 245);
-		ui_retangulo((NEO_W - w) / 2, 96, (NEO_W + w) / 2, 124, UI_AMARELO, 0);
-		ui_texto_centro(106, b, UI_BRANCO);
+		int w = hd_largura(M(b), 3) + 90;
+		hd_caixa((HD_W - w) / 2, 410, (HD_W + w) / 2, 520, 0x0a0c14u, 245);
+		hd_borda((HD_W - w) / 2, 410, (HD_W + w) / 2, 520, C_AMARELO, 3);
+		hd_texto_centro(HD_W / 2, 432, M(b), C_BRANCO, 3);
+		hd_texto_centro(HD_W / 2, 478, "ESC PULA   DEL APAGA", C_APAGADO, 2);
 	}
 	if (SDL_GetTicks() < aviso_t) {
-		int w = ui_largura(aviso_txt) + 16;
-		ui_caixa((NEO_W - w) / 2, NEO_H - 32, (NEO_W + w) / 2, NEO_H - 18, 0xff1d6b3au, 240);
-		ui_texto_centro(NEO_H - 28, aviso_txt, UI_BRANCO);
+		int w = hd_largura(M(aviso_txt), 3) + 60;
+		hd_caixa((HD_W - w) / 2, 786, (HD_W + w) / 2, 836, 0x1d6b3au, 240);
+		hd_texto_centro(HD_W / 2, 799, M(aviso_txt), C_BRANCO, 3);
 	}
 }
 

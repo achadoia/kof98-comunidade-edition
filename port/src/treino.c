@@ -3,6 +3,7 @@
 #include "treino.h"
 #include "neo.h"
 #include "ui.h"
+#include "hd.h"
 #include "config.h"
 #include <stdio.h>
 #include <string.h>
@@ -184,22 +185,50 @@ void treino_desenha(u32 tela[NEO_H][NEO_W])
 		ui_texto((NEO_W - ui_largura(s)) / 2, 208, s, 0xffffffffu);
 	}
 	if (!treino_aberto) return;
+}
 
+// ---------------------------------------------------------------- menu em alta resolução (1672x941)
+void treino_desenha_hd(void)
+{
+	if (!treino_aberto) return;
+	hd_buffer();
 	Linha L[NITENS];
 	monta_itens(L);
-	int x0 = 20, y0 = 22, x1 = NEO_W - 20, y1 = y0 + 34 + NITENS * 14 + 18;
-	ui_caixa(x0, y0, x1, y1, 0xff10131cu, 235);
-	ui_retangulo(x0, y0, x1, y1, 0xff4dd0e0u, 0);
-	ui_texto((NEO_W - ui_largura("TREINO AVANÇADO")) / 2, y0 + 8, "TREINO AVANÇADO", 0xff4dd0e0u);
 	static const int ORDEM[NITENS] = {0, 1, 9, 2, 3, 4, 5, 6, 7, 8};
+	const u32 BRANCO = 0xf4f4f4u, AMARELO = 0xffd020u, LARANJA = 0xe8641eu;
+	int x0 = 75, y0 = 188, x1 = 1600, y1 = 812;
+	hd_caixa(x0, y0, x1, y1, 0x04050bu, 228);                       // painel por cima do jogo
+	hd_borda(x0, y0, x1, y1, LARANJA, 3);
+	hd_borda(x0 + 6, y0 + 6, x1 - 6, y1 - 6, 0x8a3018u, 1);
+	if (hd_treino_titulo.px) hd_imagem((HD_W - hd_treino_titulo.w) / 2, 14, &hd_treino_titulo);
+	else hd_texto_centro(HD_W / 2, 60, "TREINO AVANÇADO", LARANJA, 7);
+	char val[64];
 	for (int k = 0; k < NITENS; k++) {
-		int i = ORDEM[k];
-		int y = y0 + 28 + k * 14;
-		if (i == item) ui_caixa(x0 + 4, y - 3, x1 - 4, y + 10, 0xff4dd0e0u, 70);
-		ui_texto(x0 + 10, y, L[i].nome, i == item ? 0xffffffffu : 0xffb8c0cc);
-		ui_texto(x1 - 10 - ui_largura(L[i].valor), y, L[i].valor, i == item ? 0xffffe060u : 0xffe0e0e0u);
+		int i = ORDEM[k], sel = i == item;
+		int yc = 232 + k * 58;
+		if (sel) hd_degrade(x0 + 20, yc - 25, x1 - 20, yc + 25, 0xc81e14u, 0xf06a1eu, 255, 0);
+		else hd_caixa(x0 + 35, yc + 28, x1 - 35, yc + 30, LARANJA, 150);
+		hd_maiusc(val, L[i].valor, sizeof val);
+		hd_texto(150, yc - 16, L[i].nome, BRANCO, 4);
+		if (val[0] && val[0] != ' ') {
+			hd_texto_centro(1255, yc - 16, val, sel ? AMARELO : BRANCO, 4);
+			hd_seta(1000, yc, -1, 13, sel ? BRANCO : LARANJA);
+			hd_seta(1510, yc, 1, 13, sel ? BRANCO : LARANJA);
+		} else {
+			hd_texto_centro(1255, yc - 16, "-", sel ? AMARELO : BRANCO, 4);
+			hd_seta(1000, yc, -1, 13, LARANJA);
+			hd_seta(1510, yc, 1, 13, LARANJA);
+		}
 	}
-	ui_texto(x0 + 10, y1 - 13, "^v escolhe   <> muda   F6 fecha", 0xff8890a0u);
+	// rodapé: direcional seleciona, B volta
+	int rx0 = 400, rx1 = 1272, ry0 = 822, ry1 = 892;
+	hd_caixa(rx0, ry0, rx1, ry1, 0x04050bu, 235);
+	hd_borda(rx0, ry0, rx1, ry1, LARANJA, 2);
+	int x = 530;
+	hd_imagem(x, ry0 + 5, &hd_dpad); x += hd_dpad.w + 14;
+	x = hd_texto(x, ry0 + 22, "SELECIONAR", BRANCO, 3) + 70;
+	hd_imagem(x, ry0 + 7, &hd_botao_b); x += hd_botao_b.w + 14;
+	hd_texto(x, ry0 + 22, "VOLTAR", BRANCO, 3);
 }
 
 // ---------------------------------------------------------------- teclas

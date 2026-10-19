@@ -14,6 +14,7 @@
 #include "entrada.h"
 #include "menu_cfg.h"
 #include "ui.h"
+#include "hd.h"
 #include "musica.h"
 #include "efeitos.h"
 #include "frontend.h"
@@ -175,7 +176,27 @@ static void fotos_desenha(const SDL_Rect *r, OvlCaixa (*cx)[2])
 		SDL_RenderCopyEx(ren, f->tex, &src, &dst, 0, NULL, fl ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 	}
 }
-static SDL_Texture *tex_jogo, *tex_fundo, *tex_linhas, *tex_mascara, *tex_ui;
+static SDL_Texture *tex_jogo, *tex_fundo, *tex_linhas, *tex_mascara, *tex_ui, *tex_hd;
+// menus F1/F6 em 1672x941 (src/hd.c) por cima de tudo, na área 16:9 da janela
+static int hd_desenha(int ow, int oh)
+{
+	if ((!cfgmenu_aberto && !treino_aberto) || !tex_hd) return 0;
+	SDL_Rect r = {0, 0, ow, ow * HD_H / HD_W};
+	if (r.h > oh) { r.h = oh; r.w = oh * HD_W / HD_H; }
+	r.x = (ow - r.w) / 2; r.y = (oh - r.h) / 2;
+	SDL_RenderCopy(ren, tex_hd, NULL, &r);
+	return 1;
+}
+static void hd_prepara(void)
+{
+	if (!cfgmenu_aberto && !treino_aberto) return;
+	if (!tex_hd) { tex_hd = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, HD_W, HD_H); SDL_SetTextureBlendMode(tex_hd, SDL_BLENDMODE_BLEND); SDL_SetTextureScaleMode(tex_hd, SDL_ScaleModeLinear); }
+	u32 *b = hd_buffer();
+	hd_limpa();
+	if (treino_aberto && !cfgmenu_aberto) treino_desenha_hd();
+	if (cfgmenu_aberto) menu_cfg_desenha_hd();
+	SDL_UpdateTexture(tex_hd, NULL, b, HD_W * 4);
+}
 static int linhas_int = -1, mascara_w, mascara_h, mascara_int = -1;
 
 typedef struct { int linear, linhas, mascara; } Filtro;   // linhas/máscara: 0-255 de escurecimento
@@ -254,6 +275,7 @@ static void apresenta(void)
 	SDL_GetRendererOutputSize(ren, &ow, &oh);
 	SDL_Rect r = area_jogo(ow, oh);
 	const Filtro *f = &FILTROS[cfg.filtro];
+	hd_prepara();
 	SDL_Texture *tj = tex_jogo;
 	if (cfg.filtro == FILTRO_XBR) {
 		if (!tex_xbr) { tex_xbr = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, NEO_W * 4, NEO_H * 4); buf_xbr = malloc((size_t)NEO_W * NEO_H * 16 * 4); SDL_SetTextureScaleMode(tex_xbr, SDL_ScaleModeLinear); }
@@ -277,11 +299,13 @@ static void apresenta(void)
 	if (tex_linhas) SDL_RenderCopy(ren, tex_linhas, NULL, &r);
 	prepara_mascara(r.w, r.h, f->mascara);
 	if (tex_mascara) SDL_RenderCopy(ren, tex_mascara, NULL, &r);
+	hd_desenha(ow, oh);
 	SDL_RenderPresent(ren);
 	for (int k = 1; k < ritmo_n; k++) {      // monitor a 120/240 Hz: o mesmo quadro de novo, no vsync seguinte
 		SDL_RenderCopy(ren, tj, NULL, &r);
 		if (tex_linhas) SDL_RenderCopy(ren, tex_linhas, NULL, &r);
 		if (tex_mascara) SDL_RenderCopy(ren, tex_mascara, NULL, &r);
+		hd_desenha(ow, oh);
 		SDL_RenderPresent(ren);
 	}
 	t_apresenta += (double)(SDL_GetPerformanceCounter() - t0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
@@ -476,7 +500,6 @@ int main(int argc, char **argv)
 		memcpy(tela, neo_fb, sizeof tela);
 		ordem_desenha(tela, tela);
 		treino_desenha(tela);
-		menu_cfg_desenha(tela);
 #ifdef KOF_TESTE
 		{ void video_despeja_fix(const char *); if (getenv("KOF_FIX")) video_despeja_fix(getenv("KOF_FIX")); }
 #endif
@@ -497,17 +520,29 @@ int main(int argc, char **argv)
 	if ((util.w * 85 / 100) / NEO_W < escala) escala = (util.w * 85 / 100) / NEO_W;
 	if (escala < 1) escala = 1;
 	const char *autofoto = getenv("KOF_AUTOFOTO");      // "quadros,arquivo.bmp": captura a saída final e sai
+	if (autofoto) config_somente_leitura = 1;           // o menu salva a cada mudança: teste não pode gravar no kof98.ini do usuário
 	if (getenv("KOF_MUDO")) cfg.mudo = 1;
 	if (getenv("KOF_VSYNC")) cfg.vsync = atoi(getenv("KOF_VSYNC"));
 	if (getenv("KOF_FILTRO")) cfg.filtro = atoi(getenv("KOF_FILTRO")) % NFILTROS;
 #ifdef KOF_TESTE
 	if (getenv("KOF_CFG")) menu_cfg_abre(atoi(getenv("KOF_CFG")) - 1);
+	{   // KOF_TREINO="menu=1,hitbox=1" também com janela (foto dos menus HD)
+		const char *tr = getenv("KOF_TREINO");
+		while (tr && *tr) {
+			char nome[16] = {0}; int v = 0;
+			if (sscanf(tr, "%15[a-z]=%d", nome, &v) == 2) treino_opcao(nome, v);
+			tr = strchr(tr, ','); if (tr) tr++;
+		}
+	}
 	if (getenv("KOF_RUNAHEAD")) cfg.run_ahead = atoi(getenv("KOF_RUNAHEAD"));
 	if (getenv("KOF_RITMO")) cfg.ritmo_monitor = atoi(getenv("KOF_RITMO"));
 #endif
 	SDL_Window *win = SDL_CreateWindow("KOF '98 UM Comunidade Edition v" KOF_VERSAO, SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED, NEO_H * escala * 4 / 3, NEO_H * escala, SDL_WINDOW_RESIZABLE | (autofoto && !getenv("KOF_JANELA") ? SDL_WINDOW_HIDDEN : 0));
 	SDL_SetWindowSize(win, NEO_H * escala * 4 / 3, NEO_H * escala);
+#ifdef KOF_TESTE
+	if (getenv("KOF_TAM")) { int tw = 1600, th = 900; sscanf(getenv("KOF_TAM"), "%d,%d", &tw, &th); SDL_SetWindowSize(win, tw, th); }   // janela 16:9 pra foto dos menus
+#endif
 #ifdef KOF_SOLO
 	{   // ícone da janela (arte/icone_64.png embutido)
 		extern const unsigned char embutido_icone_png[]; extern const size_t embutido_icone_png_tam;
@@ -546,6 +581,7 @@ int main(int argc, char **argv)
 	// menu inicial (Comunidade Edition): o jogo roda por trás dele desde o reset
 	{
 		char *bp = SDL_GetBasePath();
+		hd_init(bp);
 		if (frontend_carrega(bp) && !est_ini) frontend_abre();
 #ifdef KOF_SOLO
 		if (!autofoto || getenv("KOF_ATUALIZA")) atualiza_checa();   // versão nova no GitHub? (só no EXE distribuído)
@@ -594,6 +630,11 @@ int main(int argc, char **argv)
 				continue;
 			}
 			if (!treino_aberto && menu_cfg_evento(&e)) continue;
+			if (treino_aberto && !rede_ativa) {      // menu F6: setas, teclas/botões configurados e botões fixos do controle
+				static const int T[] = {0, TECLA_CIMA, TECLA_BAIXO, TECLA_ESQ, TECLA_DIR, TECLA_OK, TECLA_ESC, 0, 0};
+				int m = entrada_evento_menu(&e);
+				if (m && T[m] && treino_tecla(T[m])) continue;
+			}
 			if (e.type != SDL_KEYDOWN || e.key.repeat) continue;
 			SDL_Scancode sc = e.key.keysym.scancode;
 			int t = 0;
@@ -699,7 +740,6 @@ int main(int argc, char **argv)
 		}
 		if (frontend_ativo && cfgmenu_aberto) {
 			for (int y = 0; y < NEO_H; y++) for (int x = 0; x < NEO_W; x++) tela[y][x] = 0xff05070cu;
-			menu_cfg_desenha(tela);
 			apresenta();
 		} else if (frontend_ativo) frontend_desenha(ren);
 		else {
@@ -707,7 +747,6 @@ int main(int argc, char **argv)
 		memset(tela_ui, 0, sizeof tela_ui);
 		ordem_desenha(tela, tela_ui);
 		treino_desenha(tela_ui);
-		menu_cfg_desenha(tela_ui);
 		if (rede_ativa) {
 			char b[48];
 			ui_alvo(tela_ui);

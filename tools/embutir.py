@@ -1,5 +1,5 @@
 """Gera port/src/embutido.c com tudo que o EXE de arquivo único leva dentro:
-  - arte do menu (port/arte/menu_fundo.png, decodificada no EXE pelo stb_image)
+  - arte do menu (port/arte/menu_fundo.png, decodificada no EXE pelo stb_image) e dos menus F1/F6 (port/arte/hd_*.png)
   - retratos (port/bin/arte/troca_tiles.bin, saído de tools/retratos.py)
   - patches da ROM (build/patches/<nome>.json da lista abaixo): o EXE aplica no kof98ae2016.zip original
     ao carregar, igual ao tools/gerar_rom.py (variante ae), inclusive a compensação do checksum do hack.
@@ -37,6 +37,8 @@ def main():
     icone = open(os.path.join(RAIZ, "port", "arte", "icone_64.png"), "rb").read()
     fotos = open(os.path.join(RAIZ, "port", "bin", "arte", "fotos.bin"), "rb").read()
     overlay = open(os.path.join(RAIZ, "port", "bin", "arte", "overlay.bin"), "rb").read()
+    hd = {n: open(os.path.join(RAIZ, "port", "arte", a), "rb").read() for n, a in
+          [("hd_cfg_png", "hd_cfg_fundo.png"), ("hd_treino_png", "hd_treino_titulo.png"), ("hd_dpad_png", "hd_dpad.png"), ("hd_b_png", "hd_botao_b.png")]}
     patches = []
     dono = {}
     for nome in PATCHES:
@@ -60,6 +62,8 @@ def main():
         f.write(f"const unsigned char embutido_patches[] = {{\n{bytes_c(blob)}\n}};\nconst size_t embutido_patches_tam = {len(blob)};\n")
         f.write(f"const unsigned char embutido_fotos[] = {{\n{bytes_c(fotos)}\n}};\nconst size_t embutido_fotos_tam = {len(fotos)};\n")
         f.write(f"const unsigned char embutido_overlay[] = {{\n{bytes_c(overlay)}\n}};\nconst size_t embutido_overlay_tam = {len(overlay)};\n")
+        for n, d in hd.items():    # artes dos menus F1/F6 (src/hd.c)
+            f.write(f"const unsigned char embutido_{n}[] = {{\n{bytes_c(d)}\n}};\nconst size_t embutido_{n}_tam = {len(d)};\n")
     print(f"embutido.c: menu {len(png)} B, retratos {len(tiles)} B, fotos {len(fotos)} B, overlay {len(overlay)} B, {len(patches)} patches ({len(blob)} B)")
 
 

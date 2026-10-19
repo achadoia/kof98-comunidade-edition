@@ -13,3 +13,8 @@ int entrada_reconhecido(int i);                        // 1 = game controller (b
 int entrada_instancia_reconhecida(SDL_JoystickID id);  // evento de joystick cru de um controle reconhecido: ignorar
 int entrada_indice_instancia(SDL_JoystickID id);
 void entrada_estado_texto(int i, char *buf, int tam);  // o que está apertado agora (diagnóstico)
+// evento -> comando de menu (F1/F6): 1 cima 2 baixo 3 esq 4 dir 5 ok 6 voltar 7 aba anterior 8 aba seguinte, 0 nada.
+// Vale o teclado fixo (setas, Enter, Z, Esc, Tab), as teclas/botões CONFIGURADOS dos 2 jogadores (direcional, A/Start = ok)
+// e os botões fixos do controle reconhecido (direcional/analógico, A ok, B voltar, LB/RB abas).
+enum { MENU_NADA, MENU_CIMA, MENU_BAIXO, MENU_ESQ, MENU_DIR, MENU_OK, MENU_VOLTAR, MENU_ABA_ANT, MENU_ABA_SEG };
+int entrada_evento_menu(const SDL_Event *e);

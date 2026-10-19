@@ -22,7 +22,13 @@ F1 configurações · F6 treino avançado · F4 troca o filtro · F11/Alt+Enter 
 estado · F7/F8 grava/toca o boneco · F3 reset · F12 foto · Esc sai.
 
 ### Configurações (F1)
-Salvas em `kof98.ini` ao lado do EXE. Abas (Tab, ou LB/RB no controle):
+Salvas em `kof98.ini` ao lado do EXE. Abas (Tab, ou LB/RB no controle). Desde 19/10 o F1 e o F6 são desenhados em
+alta resolução (1672x941, `src/hd.c`, artes `arte/hd_*.png` embutidas no EXE único) por cima do jogo: o F1 com a
+arte `hd_cfg_fundo.png` de fundo, o F6 como painel translúcido com o título `hd_treino_titulo.png`. Os dois menus
+navegam com as setas E com as teclas/botões configurados dos 2 jogadores (direcional, A/Start = ok) e com os
+botões fixos do controle (direcional/analógico, A, B volta, LB/RB abas) — `entrada_evento_menu()` em `src/entrada.c`.
+Teste: build `-DKOF_TESTE` com `KOF_CFG=1..4` / `KOF_TREINO=menu=1`, `KOF_JANELA=1 KOF_TAM=1600,900 KOF_AUTOFOTO=0,x.bmp`
+(`KOF_SEM_CONTROLE=1` ignora um controle com botão preso; testes com KOF_AUTOFOTO nunca gravam o kof98.ini).
 - **Vídeo**: filtro (xBR 4x na CPU em 4 threads — `src/xbr.c`, padrão —, nítido, suave, linhas de TV, tubo CRT, fliperama — scanlines e grade RGB feitas na GPU
   por textura em blend multiplicativo), proporção (4:3, pixel inteiro, tela toda), laterais borradas,
   tela cheia, vsync, FPS.

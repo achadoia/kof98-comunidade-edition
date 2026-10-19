@@ -9,7 +9,7 @@ u8 acao_ativa[2][NACOES];
 
 const char *NOME_ACAO[NACOES] = {"Cima", "Baixo", "Esquerda", "Direita", "A  soco fraco", "B  chute fraco",
 	"C  soco forte", "D  chute forte", "Start", "Moeda", "A+B  esquiva", "C+D  sopro", "A+B+C  modo MAX"};
-const char *NOME_FILTRO[NFILTROS] = {"nítido", "suave", "linhas de TV", "tubo CRT", "fliperama", "xBR (bordas em curva)"};
+const char *NOME_FILTRO[NFILTROS] = {"nítido", "suave", "linhas de TV", "tubo CRT", "fliperama", "bordas em curva"};
 const char *NOME_PROP[NPROP] = {"4:3 da TV", "pixel inteiro", "tela toda"};
 const char *NOME_CENARIO[NCENARIOS] = {"rua com carros", "rio e montanhas", "porto", "mercado árabe",
 	"palácio espanhol", "ferrovia", "santuário", "festa com ônibus", "templo do chefe"};
@@ -127,8 +127,10 @@ static void txt_lig(const char *s, Ligacao *l)
 }
 
 // ---------------------------------------------------------------- arquivo
+int config_somente_leitura;   // testes automáticos (KOF_AUTOFOTO) não mexem na config do usuário
 int config_salvar(const char *arq)
 {
+	if (config_somente_leitura) return 0;
 	FILE *f = fopen(arq, "w");
 	if (!f) return 1;
 	fprintf(f, "# KOF98 Anniversary PC (kof98-recomp) - configurações (F1 no jogo)\n");

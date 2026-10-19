@@ -36,6 +36,7 @@ static void reabre(void)
 
 void entrada_init(void)
 {
+	if (getenv("KOF_SEM_CONTROLE")) return;   // teste: ignora os controles ligados (um controle com botão preso fecha o menu da foto)
 	SDL_JoystickEventState(SDL_ENABLE);
 	SDL_GameControllerEventState(SDL_ENABLE);
 	reabre();
@@ -47,7 +48,7 @@ void entrada_init(void)
 
 void entrada_evento(const SDL_Event *e)
 {
-	if (e->type == SDL_JOYDEVICEADDED || e->type == SDL_JOYDEVICEREMOVED || e->type == SDL_CONTROLLERDEVICEADDED || e->type == SDL_CONTROLLERDEVICEREMOVED) reabre();
+	if ((e->type == SDL_JOYDEVICEADDED || e->type == SDL_JOYDEVICEREMOVED || e->type == SDL_CONTROLLERDEVICEADDED || e->type == SDL_CONTROLLERDEVICEREMOVED) && !getenv("KOF_SEM_CONTROLE")) reabre();
 	if (getenv("KOF_DEBUG_ENTRADA")) {
 		if (e->type == SDL_CONTROLLERBUTTONDOWN) fprintf(stderr, "gc botão %d (%s)\n", e->cbutton.button, SDL_GameControllerGetStringForButton((SDL_GameControllerButton)e->cbutton.button));
 		if (e->type == SDL_JOYBUTTONDOWN) fprintf(stderr, "joy %d botão %d\n", e->jbutton.which, e->jbutton.button);
@@ -123,4 +124,98 @@ void entrada_le(void)
 			for (int k = 0; k < NLIG; k++) if (entrada_ligacao_ativa(&cfg.lig[j][a][k])) v = 1;
 			acao_ativa[j][a] = v;
 		}
+}
+
+// ---------------------------------------------------------------- eventos -> comando de menu (F1/F6)
+static int acao_para_menu(int a)
+{
+	switch (a) {
+	case AC_CIMA: return MENU_CIMA; case AC_BAIXO: return MENU_BAIXO;
+	case AC_ESQ: return MENU_ESQ; case AC_DIR: return MENU_DIR;
+	case AC_A: case AC_START: return MENU_OK;
+	default: return MENU_NADA;
+	}
+}
+
+// a ligação l corresponde a este evento? (eixos: só a borda de entrada, guardada por controle/eixo)
+static int liga_bate(const Ligacao *l, const SDL_Event *e, int disp, int novo_eixo)
+{
+	switch (e->type) {
+	case SDL_KEYDOWN: return l->tipo == LIG_TECLA && l->cod == e->key.keysym.scancode;
+	case SDL_CONTROLLERBUTTONDOWN: return l->tipo == LIG_GCBOTAO && l->disp == disp && l->cod == e->cbutton.button;
+	case SDL_JOYBUTTONDOWN: return l->tipo == LIG_BOTAO && l->disp == disp && l->cod == e->jbutton.button;
+	case SDL_JOYHATMOTION: return l->tipo == LIG_HAT && l->disp == disp && (e->jhat.value & l->val) && !(e->jhat.value & (e->jhat.value - 1));
+	case SDL_CONTROLLERAXISMOTION: return novo_eixo && l->tipo == LIG_GCEIXO && l->disp == disp && l->cod == e->caxis.axis && l->val == novo_eixo;
+	case SDL_JOYAXISMOTION: return novo_eixo && l->tipo == LIG_EIXO && l->disp == disp && l->cod == e->jaxis.axis && l->val == novo_eixo;
+	default: return 0;
+	}
+}
+
+int entrada_evento_menu(const SDL_Event *e)
+{
+	static s8 eixo_gc[MAX_CTRL][8], eixo_j[MAX_CTRL][8];
+	int disp = 0, novo = 0;
+	if (e->type == SDL_KEYDOWN) {
+		if (e->key.repeat) return MENU_NADA;
+		switch (e->key.keysym.scancode) {
+		case SDL_SCANCODE_UP: return MENU_CIMA; case SDL_SCANCODE_DOWN: return MENU_BAIXO;
+		case SDL_SCANCODE_LEFT: return MENU_ESQ; case SDL_SCANCODE_RIGHT: return MENU_DIR;
+		case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: case SDL_SCANCODE_Z: return MENU_OK;
+		case SDL_SCANCODE_ESCAPE: return MENU_VOLTAR;
+		case SDL_SCANCODE_TAB: return (e->key.keysym.mod & KMOD_SHIFT) ? MENU_ABA_ANT : MENU_ABA_SEG;
+		default: break;
+		}
+	} else if (e->type == SDL_CONTROLLERBUTTONDOWN) {
+		disp = entrada_indice_instancia(e->cbutton.which);
+		switch (e->cbutton.button) {      // botões fixos do controle reconhecido (os ícones do rodapé)
+		case SDL_CONTROLLER_BUTTON_DPAD_UP: return MENU_CIMA; case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return MENU_BAIXO;
+		case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return MENU_ESQ; case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return MENU_DIR;
+		case SDL_CONTROLLER_BUTTON_A: case SDL_CONTROLLER_BUTTON_START: return MENU_OK;
+		case SDL_CONTROLLER_BUTTON_B: return MENU_VOLTAR;
+		case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: return MENU_ABA_ANT;
+		case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return MENU_ABA_SEG;
+		default: break;
+		}
+	} else if (e->type == SDL_CONTROLLERAXISMOTION) {
+		disp = entrada_indice_instancia(e->caxis.which);
+		int ax = e->caxis.axis; if (ax < 0 || ax >= 8) return MENU_NADA;
+		int v = e->caxis.value > 16000 ? 1 : e->caxis.value < -16000 ? -1 : 0;
+		if (v == eixo_gc[disp][ax]) return MENU_NADA;
+		eixo_gc[disp][ax] = (s8)v;
+		if (!v) return MENU_NADA;
+		novo = v;
+		if (ax == SDL_CONTROLLER_AXIS_LEFTX) return v < 0 ? MENU_ESQ : MENU_DIR;   // analógico esquerdo navega
+		if (ax == SDL_CONTROLLER_AXIS_LEFTY) return v < 0 ? MENU_CIMA : MENU_BAIXO;
+	} else if (e->type == SDL_JOYBUTTONDOWN) {
+		if (entrada_instancia_reconhecida(e->jbutton.which)) return MENU_NADA;
+		disp = entrada_indice_instancia(e->jbutton.which);
+	} else if (e->type == SDL_JOYHATMOTION) {
+		if (entrada_instancia_reconhecida(e->jhat.which) || !e->jhat.value) return MENU_NADA;
+		disp = entrada_indice_instancia(e->jhat.which);
+	} else if (e->type == SDL_JOYAXISMOTION) {
+		if (entrada_instancia_reconhecida(e->jaxis.which)) return MENU_NADA;
+		disp = entrada_indice_instancia(e->jaxis.which);
+		int ax = e->jaxis.axis; if (ax < 0 || ax >= 8) return MENU_NADA;
+		int v = e->jaxis.value > 16000 ? 1 : e->jaxis.value < -16000 ? -1 : 0;
+		if (v == eixo_j[disp][ax]) return MENU_NADA;
+		eixo_j[disp][ax] = (s8)v;
+		if (!v) return MENU_NADA;
+		novo = v;
+	} else return MENU_NADA;
+	// teclas/botões configurados no F1 (qualquer jogador): direcional navega, A/Start confirma
+	for (int j = 0; j < 2; j++)
+		for (int a = 0; a < NACOES; a++) {
+			int m = acao_para_menu(a);
+			if (!m) continue;
+			for (int k = 0; k < NLIG; k++) if (liga_bate(&cfg.lig[j][a][k], e, disp, novo)) return m;
+		}
+	if (e->type == SDL_JOYHATMOTION) {      // stick genérico sem configuração: hat navega
+		int v = e->jhat.value;
+		return v == SDL_HAT_UP ? MENU_CIMA : v == SDL_HAT_DOWN ? MENU_BAIXO : v == SDL_HAT_LEFT ? MENU_ESQ : v == SDL_HAT_RIGHT ? MENU_DIR : MENU_NADA;
+	}
+	if (e->type == SDL_JOYBUTTONDOWN) {
+		int b = e->jbutton.button;
+		return b == 0 ? MENU_OK : b == 1 ? MENU_VOLTAR : b == 4 ? MENU_ABA_ANT : b == 5 ? MENU_ABA_SEG : MENU_NADA;
+	}
+	return MENU_NADA;
 }

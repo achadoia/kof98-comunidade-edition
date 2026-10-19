@@ -40,6 +40,7 @@ void config_padrao(void);
 void config_controles_padrao(int jogador);
 int config_carregar(const char *arq);
 int config_salvar(const char *arq);
+extern int config_somente_leitura;      // 1 = config_salvar não grava (testes)
 void config_descreve(const Ligacao *l, char *buf, int tam);
 
 // estado das ações (lido do SDL); preenchido em main.c
