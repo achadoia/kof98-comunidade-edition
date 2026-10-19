@@ -13,7 +13,7 @@ INC="-Isrc -I$TP/font8x8 -I$TP/Musashi -I$TP/z80 -I$TP/ymfm/src -I$TP/miniz -I$T
 mkdir -p ${OBJ:-obj} bin
 compila() { # $1 = compilador, $2 = fonte
 	o="${OBJ:-obj}/$(echo "$2" | tr '/' '_' | sed 's/\.[^.]*$//').o"
-	if [ ! -f "$o" ] || [ "$2" -nt "$o" ] || [ src/neo.h -nt "$o" ]; then
+	if [ ! -f "$o" ] || [ "$2" -nt "$o" ] || [ src/neo.h -nt "$o" ] || [ src/versao.h -nt "$o" ]; then   # versao.h: senão o auto-update compara com a versão velha
 		$ZIG $1 $ALVO $OPT $INC -w -c "$2" -o "$o"
 	fi
 	OBJS="$OBJS $o"

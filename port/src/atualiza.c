@@ -88,6 +88,7 @@ static int checa_thread(void *arg)
 	snprintf(atualiza_versao, sizeof atualiza_versao, "%s", tag[0] == 'v' ? tag + 1 : tag);
 	const char *fake = getenv("KOF_VERSAO_FAKE");          // teste: finge ser uma versão antiga
 	atualiza_estado = versao_num(tag) > versao_num(fake ? fake : KOF_VERSAO) ? ATU_NOVA : ATU_ATUAL;
+	if (getenv("KOF_DEBUG_ATUALIZA")) fprintf(stderr, "atualiza: tag \"%s\" (%d) x minha \"%s\" (%d) -> estado %d\n", tag, versao_num(tag), KOF_VERSAO, versao_num(KOF_VERSAO), atualiza_estado);
 	return 0;
 }
 void atualiza_checa(void)
