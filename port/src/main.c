@@ -82,6 +82,29 @@ static void run_ahead(int n)
 	musica_silenciosa = 0; estado_leve = 0;
 }
 
+// ---------------------------------------------------------------- rollback online
+// Volta ao estado do início do quadro k e re-simula até o quadro atual com as entradas que chegaram de
+// verdade (o som desses quadros é descartado: o que já tocou, tocou).
+static void resimula_rede(u32 k)
+{
+	extern int estado_ring_carregar(u32); extern void estado_ring_salvar(u32);
+	if (estado_ring_carregar(k)) { fprintf(stderr, "rollback: sem estado do quadro %u\n", k); rede_dessincronizou = 1; return; }
+	musica_silenciosa = 1; estado_leve = 1;
+	for (u32 q = k; q < rede_quadro(); q++) {
+		u8 p1, x1, p2, x2;
+		rede_entradas_de(q, &p1, &x1, &p2, &x2);
+		neo_in_p1 = p1; neo_in_p2 = p2; neo_in_start = (u8)(0x0f & ~((x1 & REDE_X_START) ? 1 : 0) & ~((x2 & REDE_X_START) ? 4 : 0));
+		neo_in_coin = 0x07; neo_in_test = 1;
+		estado_ring_salvar(q);
+		if (rede_quadro_real(q)) ordem_entradas();
+		neo_frame();
+		rede_hash_depois(q + 1);
+	}
+	audio_descarta();
+	musica_silenciosa = 0; estado_leve = 0;
+}
+static int chat_digitando; static char chat_texto[72];
+
 // ---------------------------------------------------------------- ritmo do monitor
 // 59,19 Hz numa tela de 60 Hz = um quadro repetido a cada ~70: o scroll engasga. Com a opção ligada o jogo
 // roda na taxa do monitor (60, 120 = 2 apresentações por quadro...) com vsync, e o som é reamostrado 1,4% acima.
@@ -447,6 +470,36 @@ int main(int argc, char **argv)
 			treino_entradas();
 			ordem_entradas();
 			config_aplica_cenario();
+			int ja_rodou = 0;
+#ifdef KOF_TESTE
+			if (getenv("KOF_TESTE_ROLLBACK")) {   // determinismo do savestate: salva, roda, volta 8 quadros, re-simula e compara o hash
+				extern int estado_ring_carregar(u32); extern void estado_ring_salvar(u32);
+				static u8 rp1[64], rp2[64], rs[64]; static u32 rh[64]; static int erros;
+				u32 qa = neo_quadros;
+				estado_leve = 1; estado_ring_salvar(qa); estado_leve = 0;
+				rp1[qa % 64] = neo_in_p1; rp2[qa % 64] = neo_in_p2; rs[qa % 64] = neo_in_start;
+				neo_frame();
+				{ u32 h = 2166136261u; for (u32 a = 0x100000; a < 0x110000; a += 2) { h ^= (u32)m68k_read_memory_16(a); h *= 16777619u; } rh[(qa + 1) % 64] = h; }
+				if (qa > 200 && qa % 30 == 0) {
+					u32 q0 = qa - 8;
+					if (estado_ring_carregar(q0)) fprintf(stderr, "rollback-teste: sem estado %u\n", q0);
+					else {
+						musica_silenciosa = 1; estado_leve = 1;
+						for (u32 q = q0; q <= qa; q++) {
+							neo_in_p1 = rp1[q % 64]; neo_in_p2 = rp2[q % 64]; neo_in_start = rs[q % 64]; neo_in_coin = 0x07; neo_in_test = 1;
+							ordem_entradas();
+							neo_frame();
+							u32 h = 2166136261u; for (u32 a = 0x100000; a < 0x110000; a += 2) { h ^= (u32)m68k_read_memory_16(a); h *= 16777619u; }
+							if (h != rh[(q + 1) % 64]) { if (erros++ < 20) fprintf(stderr, "rollback-teste: quadro %u diverge (%08x x %08x) apos voltar pra %u\n", q + 1, h, rh[(q + 1) % 64], q0); break; }
+						}
+						audio_descarta(); musica_silenciosa = 0; estado_leve = 0;
+						if (neo_quadros != qa + 1) fprintf(stderr, "rollback-teste: neo_quadros %u != %u\n", neo_quadros, qa + 1);
+					}
+				}
+				if (qa + 1 >= quadros_max) fprintf(stderr, "rollback-teste: %d divergencias\n", erros);
+				ja_rodou = 1;
+			}
+#endif
 #ifdef KOF_TESTE
 			{   // KOF_POKE="endereco:valor:ini:fim" (hexa:hexa:dec:dec) — escreve um byte a cada quadro no intervalo
 				const char *pk = getenv("KOF_POKE");
@@ -456,7 +509,7 @@ int main(int argc, char **argv)
 			}
 #endif
 			video_limite_linha = cfg.sprites_sem_limite ? MAX_SPRITES_TELA : 96;
-			neo_frame();
+			if (!ja_rodou) neo_frame();
 			treino_depois_quadro();
 #ifdef KOF_TESTE
 			if (getenv("KOF_RUNAHEAD")) {   // teste: o estado final tem que ser idêntico ao sem run-ahead
@@ -469,6 +522,12 @@ int main(int argc, char **argv)
 				void frontend_teste_zera(void);
 				frontend_vigia();
 				if (frontend_ativo) { fprintf(stderr, "vigia abriu no quadro %u\n", neo_quadros); frontend_teste_zera(); }
+			}
+			if (getenv("KOF_HASH_RAM") && neo_quadros % 60 == 0) {   // hash da RAM do 68k a cada 60 quadros (determinismo entre configs)
+				u32 h = 2166136261u;
+				for (u32 a = 0x100000; a < 0x110000; a += 2) { h ^= (u32)m68k_read_memory_16(a); h *= 16777619u; }
+				estado_mem_salvar(); extern size_t estado_mem_tam(void);
+				fprintf(stdout, "hash %u %08x estado %u\n", neo_quadros, h, (unsigned)estado_mem_tam());
 			}
 			if (getenv("KOF_LOG_PRETO")) {   // quadros com a tela quase toda preta (bug do sprite 0 na rua com carros)
 				int pretos = 0;
@@ -631,6 +690,19 @@ int main(int argc, char **argv)
 				}
 				continue;
 			}
+			if (rede_ativa && chat_digitando) {        // digitando no chat: Enter manda, Esc cancela, Backspace apaga
+				if (e.type == SDL_TEXTINPUT) { if (strlen(chat_texto) + strlen(e.text.text) < sizeof chat_texto - 1) strcat(chat_texto, e.text.text); continue; }
+				if (e.type == SDL_KEYDOWN) {
+					SDL_Scancode s = e.key.keysym.scancode;
+					if (s == SDL_SCANCODE_RETURN || s == SDL_SCANCODE_KP_ENTER) { rede_chat_envia(chat_texto); chat_digitando = 0; SDL_StopTextInput(); entrada_teclado_bloqueado = 0; }
+					else if (s == SDL_SCANCODE_ESCAPE) { chat_digitando = 0; SDL_StopTextInput(); entrada_teclado_bloqueado = 0; }
+					else if (s == SDL_SCANCODE_BACKSPACE) { size_t n = strlen(chat_texto); while (n && (chat_texto[n - 1] & 0xc0) == 0x80) n--; if (n) n--; chat_texto[n] = 0; }
+				}
+				continue;
+			}
+			if (rede_ativa && !frontend_ativo && e.type == SDL_KEYDOWN && !e.key.repeat && e.key.keysym.scancode == SDL_SCANCODE_T && !cfgmenu_aberto) {
+				chat_digitando = 1; chat_texto[0] = 0; entrada_teclado_bloqueado = 1; SDL_StartTextInput(); continue;
+			}
 			if (!treino_aberto && menu_cfg_evento(&e)) continue;
 			if (treino_aberto && !rede_ativa) {      // menu F6: setas, teclas/botões configurados e botões fixos do controle
 				static const int T[] = {0, TECLA_CIMA, TECLA_BAIXO, TECLA_ESQ, TECLA_DIR, TECLA_OK, TECLA_ESC, 0, 0};
@@ -669,11 +741,17 @@ int main(int argc, char **argv)
 		ordem_ligada = rede_ativa ? rede_ordem : cfg.ordem_botao;   // na partida online vale a config do anfitrião nos dois lados
 
 		entrada_le();
+		if (rede_ativa) {                              // rollback: a entrada real do outro lado chegou diferente da prevista
+			int k = rede_rollback();
+			if (k >= 0) resimula_rede((u32)k);
+			rede_checa_crc();
+			rede_previsao = !frontend_ativo && !frontend_piloto() && !ordem_ativa() && !ordem_na_tela() && !cfgmenu_aberto;   // previsão só na luta
+		} else { rede_previsao = 0; if (chat_digitando) { chat_digitando = 0; SDL_StopTextInput(); entrada_teclado_bloqueado = 0; } }
 		int pausado = !frontend_ativo && !rede_ativa && (cfgmenu_aberto || treino_aberto || (sem_foco && cfg.pausa_sem_foco));   // online nunca pausa (o outro lado esperaria)
 		if (frontend_ativo && !cfgmenu_aberto) frontend_controles(&rodando);
 		int passos = pausado ? 0 : frontend_passos();   // >1 = avanço rápido escondido atrás do menu
 		int rede_parado = 0;
-		if (rede_ativa) { int d = rede_pode(); if (passos > d) passos = d; rede_parado = d == 0; rede_conta_espera(rede_parado); }   // lockstep: só anda com a entrada do outro lado
+		if (rede_ativa) { int d = rede_pode(); if (passos > d) passos = d; rede_parado = d == 0; rede_conta_espera(rede_parado); }   // lockstep/rollback: quantos quadros dá pra andar
 #ifdef KOF_TESTE
 		{ static u32 ult; if (getenv("KOF_DEBUG_REDE") && SDL_GetTicks() - ult >= 1000) { ult = SDL_GetTicks(); fprintf(stderr, "rede: estado %d ativa %d quadro %u pode %d ping %d atraso %d espera %d dessinc %d neo %u menu %d | %s\n", rede_estado, rede_ativa, rede_quadro(), rede_pode(), rede_ping, rede_atraso, rede_esperando(), rede_dessincronizou, neo_quadros, frontend_ativo, rede_status()); } }
 #endif
@@ -684,6 +762,7 @@ int main(int argc, char **argv)
 			double aj = (fila_q - 3.0) * 0.004;
 			if (aj > 0.015) aj = 0.015; if (aj < -0.015) aj = -0.015;
 			audio_fator_ritmo(ritmo_fator * (1.0 + aj));
+			if (rede_ativa) { int d = rede_pode(); if (passos > d) passos = d; }   // (bug até 19/10: isto passava por cima do lockstep e rodava um quadro sem a entrada do outro = dessincronia)
 		}
 		Uint64 t_em0 = SDL_GetPerformanceCounter();
 		for (int passo_i = 0; passo_i < passos; passo_i++) {
@@ -693,7 +772,11 @@ int main(int argc, char **argv)
 				config_aplica_entradas();
 				u8 mp = (u8)(neo_in_p1 & neo_in_p2), mx = (neo_in_start & 5) != 5 ? REDE_X_START : 0;
 				if (cfgmenu_aberto || frontend_ativo) { mp = 0xff; mx = 0; }
+#ifdef KOF_TESTE
+				if (getenv("KOF_REDE_RANDOM") && rede_previsao) mp = (u8)(rand() & 0xff);   // lab: entrada aleatória força rollbacks
+#endif
 				u8 p1, x1, p2, x2;
+				{ extern void estado_ring_salvar(u32); estado_leve = 1; estado_ring_salvar(rede_quadro()); estado_leve = 0; }   // estado do início deste quadro (rollback volta aqui)
 				rede_passo(mp, mx, &p1, &x1, &p2, &x2);
 				if (x1 & REDE_X_MENU) frontend_escolhe_item(x1 >> 4);
 				if (piloto) { neo_in_p1 = pp1; neo_in_p2 = pp2; neo_in_start = ps; }
@@ -706,7 +789,7 @@ int main(int argc, char **argv)
 #endif
 			if (!piloto && SDL_GetKeyboardState(NULL)[SDL_SCANCODE_F2]) neo_in_test = 0;
 			if (!piloto && !rede_ativa) treino_entradas();
-			if (!piloto) ordem_entradas();
+			if (!piloto && rede_quadro_real(rede_quadro() - 1)) ordem_entradas();   // ORDER SELECT só em quadro confirmado (rollback não desfaz os estados do módulo)
 			if (!rede_ativa) config_aplica_cenario();
 			Uint64 tq = SDL_GetPerformanceCounter();
 			neo_frame();
@@ -752,10 +835,23 @@ int main(int argc, char **argv)
 		if (rede_ativa) {
 			char b[48];
 			ui_alvo(tela_ui);
-			snprintf(b, sizeof b, "online %dP  ping %d ms  atraso %d", rede_anfitriao ? 1 : 2, rede_ping, rede_atraso);
+			snprintf(b, sizeof b, "online %dP  ping %d ms  atraso %d  rollback %d", rede_anfitriao ? 1 : 2, rede_ping, rede_atraso, rede_rollbacks);
 			ui_texto(4, NEO_H - 12, b, 0xff60ff90u);
 			if (rede_esperando() > 15) ui_texto_centro(NEO_H / 2 - 4, "Aguardando o adversário...", 0xffffe060u);
 			if (rede_dessincronizou) ui_texto_centro(NEO_H / 2 + 10, "DESSINCRONIZOU: ESC e crie a sala de novo", 0xffff6060u);
+			{   // chat: mensagens dos últimos 10 s no canto inferior esquerdo + campo de digitação (T)
+				int y = NEO_H - 24;
+				if (chat_digitando) {
+					char l[96]; snprintf(l, sizeof l, "> %s_", chat_texto);
+					ui_caixa(2, y - 2, 2 + ui_largura(l) + 4, y + 9, 0xff101420u, 230); ui_texto(4, y, l, 0xffffffffu); y -= 11;
+				} else if (!rede_chat_n || SDL_GetTicks() - rede_chat[rede_chat_n - 1].t > 10000) { ui_texto(4, y, "T: chat", 0xff8890a0u); y -= 11; }
+				for (int i = rede_chat_n - 1; i >= 0 && y > 0; i--) {
+					if (SDL_GetTicks() - rede_chat[i].t > 10000) break;
+					char l[96]; snprintf(l, sizeof l, "%s: %s", rede_chat[i].de_mim == (rede_anfitriao ? 1 : 0) ? "1P" : "2P", rede_chat[i].texto);
+					if ((int)strlen(l) > 38) l[38] = 0;
+					ui_caixa(2, y - 2, 2 + ui_largura(l) + 4, y + 9, 0xff101420u, 200); ui_texto(4, y, l, rede_chat[i].de_mim ? 0xffffe060u : 0xff80e0ffu); y -= 11;
+				}
+			}
 		}
 		fps_n++;
 		if (SDL_GetTicks() - fps_t >= 1000) {

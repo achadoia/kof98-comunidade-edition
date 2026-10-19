@@ -18,3 +18,4 @@ void entrada_estado_texto(int i, char *buf, int tam);  // o que está apertado a
 // e os botões fixos do controle reconhecido (direcional/analógico, A ok, B voltar, LB/RB abas).
 enum { MENU_NADA, MENU_CIMA, MENU_BAIXO, MENU_ESQ, MENU_DIR, MENU_OK, MENU_VOLTAR, MENU_ABA_ANT, MENU_ABA_SEG };
 int entrada_evento_menu(const SDL_Event *e);
+extern int entrada_teclado_bloqueado;   // 1 = digitando no chat: as teclas do jogo não valem

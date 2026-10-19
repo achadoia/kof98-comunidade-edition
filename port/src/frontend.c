@@ -420,6 +420,7 @@ void frontend_rede_teste(const char *s)   // KOF_REDE=criar | entrar:<código ou
 void frontend_vigia(void)
 {
 	if (!fundo || frontend_ativo || piloto) { vigia_n = 0; return; }
+	if (!rede_quadro_real(rede_quadro() - 1)) { vigia_n = 0; return; }   // online: só em quadro confirmado (um quadro previsto pode ser desfeito pelo rollback)
 	int ms = m68k_read_memory_8(RAM_TELA) == 1 && !m68k_read_memory_8(RAM_FASE) && !m68k_read_memory_8(RAM_OPTION);
 	if (!ms) { vigia_n = 0; return; }
 	if (++vigia_n < 6) return;

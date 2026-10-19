@@ -19,12 +19,12 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#define VERSAO_REDE 2
+#define VERSAO_REDE 3
 #define PORTA_BASE 7998
 #define RING 512
 #define OPEN_T 200
 
-enum { T_OLA = 1, T_PING, T_PONG, T_INICIO, T_PRONTO, T_ENTRADA, T_TCHAU };
+enum { T_OLA = 1, T_PING, T_PONG, T_INICIO, T_PRONTO, T_ENTRADA, T_TCHAU, T_CHAT };
 
 int rede_estado, rede_anfitriao, rede_ativa, rede_atraso = 3, rede_ping, rede_dessincronizou, rede_upnp = 2;
 char rede_codigo[32], rede_msg[128];
@@ -59,18 +59,47 @@ static u32 quadro, loc_prox, rem_tem_ate, par_ack;
 static u32 t_envio, esperando_n;
 static u32 meu_crc[16], meu_crc_q[16];
 static u32 crc_envia_q, crc_envia, crc_comparado = 0xffffffffu; static int crc_ruins;
+// rollback
+int rede_previsao, rede_rollbacks;
+static u8 usado_p[RING], usado_x[RING]; static u32 usado_q[RING];   // entrada remota usada em cada quadro simulado
+static u32 confirmado_ate;            // quadros < isto já foram conferidos contra a entrada real do outro lado
+static int rollback_para = -1;
+static u8 rem_ult_p = 0xff;           // última entrada remota conhecida (= previsão)
+static u32 cedido_em;
+static u32 par_crc_q[8], par_crc_v[8]; static int par_crc_n;   // somas do outro lado esperando conferência
+// chat
+RedeChat rede_chat[REDE_CHAT_N]; int rede_chat_n;
+static u32 chat_id, chat_id_rx; static u8 chat_pkt[96]; static int chat_pkt_n, chat_reenvia; static u32 t_chat;
+extern void estado_ring_limpa(void);
+#ifdef KOF_TESTE
+// laboratório: KOF_REDE_LAG=ms atrasa o envio, KOF_REDE_PERDA=pct descarta pacotes (só os de ENTRADA/CHAT)
+static struct { u8 b[1500]; int n; u32 t; struct sockaddr_in a; } fila_lag[256]; static int lag_ini, lag_fim;
+#endif
 
 // ---------------------------------------------------------------- util
 static void le32(const u8 *p, u32 *v) { memcpy(v, p, 4); }
 static void es32(u8 *p, u32 v) { memcpy(p, &v, 4); }
 static void envia_para(const struct sockaddr_in *a, const u8 *b, int n) { if (sock != INVALID_SOCKET) sendto(sock, (const char *)b, n, 0, (const struct sockaddr *)a, sizeof *a); }
+#ifdef KOF_TESTE
+static void envia(const u8 *b, int n)
+{
+	if (!par_ok) return;
+	const char *lag = getenv("KOF_REDE_LAG"), *perda = getenv("KOF_REDE_PERDA");
+	if ((b[2] == T_ENTRADA || b[2] == T_CHAT) && perda && rand() % 100 < atoi(perda)) return;
+	if (lag && n <= 1500 && (lag_fim + 1) % 256 != lag_ini) { memcpy(fila_lag[lag_fim].b, b, n); fila_lag[lag_fim].n = n; fila_lag[lag_fim].t = SDL_GetTicks() + (u32)atoi(lag); fila_lag[lag_fim].a = par; lag_fim = (lag_fim + 1) % 256; return; }
+	envia_para(&par, b, n);
+}
+static void lag_poll(void) { while (lag_ini != lag_fim && (int)(SDL_GetTicks() - fila_lag[lag_ini].t) >= 0) { envia_para(&fila_lag[lag_ini].a, fila_lag[lag_ini].b, fila_lag[lag_ini].n); lag_ini = (lag_ini + 1) % 256; } }
+#else
 static void envia(const u8 *b, int n) { if (par_ok) envia_para(&par, b, n); }
+#endif
 static int mesmo(const struct sockaddr_in *a, const struct sockaddr_in *b) { return a->sin_addr.s_addr == b->sin_addr.s_addr && a->sin_port == b->sin_port; }
 
 static u32 hash_rom(void)
 {
 	u32 h = 2166136261u;
 	for (u32 i = 0; i < R.p_size; i++) { h ^= R.p[i]; h *= 16777619u; }
+	if (R.bios) for (u32 i = 0; i < 0x20000; i++) { h ^= R.bios[i]; h *= 16777619u; }   // BIOS/região diferente também dessincroniza
 	return h;
 }
 
@@ -359,6 +388,11 @@ static void manda_entradas(void)
 	b[0] = 'K'; b[1] = 'N'; b[2] = T_ENTRADA; es32(b + 3, ini); b[7] = (u8)n;
 	for (u32 i = 0; i < n; i++) { b[8 + i * 2] = loc_p[(ini + i) % RING]; b[9 + i * 2] = loc_x[(ini + i) % RING]; }
 	u8 *q = b + 8 + n * 2;
+	{   // manda a soma mais nova que já é definitiva: quadro simulado com a entrada real do outro e sem rollback pendente
+		crc_envia_q = 0xffffffffu;
+		for (int i = 0; i < 16; i++)
+			if (meu_crc_q[i] != 0xffffffffu && meu_crc_q[i] <= rem_tem_ate && (rollback_para < 0 || meu_crc_q[i] <= (u32)rollback_para) && (crc_envia_q == 0xffffffffu || meu_crc_q[i] > crc_envia_q)) { crc_envia_q = meu_crc_q[i]; crc_envia = meu_crc[i]; }
+	}
 	es32(q, rem_tem_ate); es32(q + 4, crc_envia_q); es32(q + 8, crc_envia);
 	envia(b, (int)(8 + n * 2 + 12));
 	t_envio = SDL_GetTicks();
@@ -372,9 +406,13 @@ static void comeca_partida(void)
 	for (int i = 0; i < rede_atraso; i++) { loc_p[i] = 0xff; loc_x[i] = 0; }
 	loc_prox = (u32)rede_atraso;
 	memset(meu_crc_q, 0xff, sizeof meu_crc_q); crc_envia_q = 0xffffffffu; crc_comparado = 0xffffffffu; crc_ruins = 0;
+	memset(usado_q, 0xff, sizeof usado_q); confirmado_ate = 0; rollback_para = -1; rem_ult_p = 0xff; cedido_em = 0; par_crc_n = 0; rede_rollbacks = 0; rede_previsao = 0;
+	rede_chat_n = 0; chat_reenvia = 0;
+	estado_ring_limpa();
 	snprintf(rede_msg, sizeof rede_msg, "Conectado! ping %d ms, atraso %d quadros", rede_ping, rede_atraso);
 	extern void frontend_online_comeca(void);
 	frontend_online_comeca();
+	neo_quadros = 0;   // o pulso de 1 Hz do relógio (rtc_tp) sai de neo_quadros: os dois lados precisam da mesma fase, senão a BIOS conta os segundos em quadros diferentes e a RAM diverge de vez em quando (falso DESSINCRONIZOU)
 }
 
 static void recebe(const u8 *b, int n, const struct sockaddr_in *de)
@@ -425,13 +463,29 @@ static void recebe(const u8 *b, int n, const struct sockaddr_in *de)
 			rem_p[f % RING] = b[8 + i * 2]; rem_x[f % RING] = b[9 + i * 2]; rem_q[f % RING] = f;
 		}
 		while (rem_q[rem_tem_ate % RING] == rem_tem_ate) rem_tem_ate++;
+		if (rem_tem_ate) rem_ult_p = rem_p[(rem_tem_ate - 1) % RING];
+		{   // quadros já simulados com previsão: a entrada real bateu? senão, rollback a partir do primeiro errado
+			u32 lim = rem_tem_ate < quadro ? rem_tem_ate : quadro;
+			for (u32 f = confirmado_ate; f < lim; f++)
+				if (usado_q[f % RING] == f && (usado_p[f % RING] != rem_p[f % RING] || usado_x[f % RING] != rem_x[f % RING])) { if (rollback_para < 0 || f < (u32)rollback_para) rollback_para = (int)f; break; }
+			if (lim > confirmado_ate) confirmado_ate = lim;
+		}
 		const u8 *q = b + 8 + cnt * 2;
 		le32(q, &v); if (v > par_ack) par_ack = v;
 		u32 cq, cc; le32(q + 4, &cq); le32(q + 8, &cc);
-		if (cq != 0xffffffffu) for (int i = 0; i < 16; i++) if (meu_crc_q[i] == cq && cq != crc_comparado) {   // só avisa com 2 divergências seguidas (o aperto de mão do som faz a RAM diferir por um instante)
-			crc_comparado = cq;
-			if (meu_crc[i] != cc) { if (++crc_ruins >= 2) rede_dessincronizou = 1; } else crc_ruins = 0;
+		if (cq != 0xffffffffu && cq != crc_comparado) {
+			int ja = 0; for (int i = 0; i < par_crc_n; i++) if (par_crc_q[i] == cq) ja = 1;
+			if (!ja) { if (par_crc_n == 8) { memmove(par_crc_q, par_crc_q + 1, 7 * 4); memmove(par_crc_v, par_crc_v + 1, 7 * 4); par_crc_n = 7; } par_crc_q[par_crc_n] = cq; par_crc_v[par_crc_n] = cc; par_crc_n++; }
 		}
+		break; }
+	case T_CHAT: {
+		if (!rede_ativa || n < 8) return;
+		le32(b + 3, &v); int len = b[7]; if (len > 71 || n < 8 + len) return;
+		if (v == chat_id_rx) return;
+		chat_id_rx = v;
+		if (rede_chat_n == REDE_CHAT_N) { memmove(rede_chat, rede_chat + 1, sizeof(RedeChat) * (REDE_CHAT_N - 1)); rede_chat_n--; }
+		memcpy(rede_chat[rede_chat_n].texto, b + 8, (size_t)len); rede_chat[rede_chat_n].texto[len] = 0;
+		rede_chat[rede_chat_n].t = SDL_GetTicks(); rede_chat[rede_chat_n].de_mim = 0; rede_chat_n++;
 		break; }
 	case T_TCHAU:
 		if (rede_estado == REDE_DESLIGADA) return;
@@ -519,6 +573,9 @@ void rede_desligar(void)
 void rede_poll(void)
 {
 	if (sock == INVALID_SOCKET) return;
+#ifdef KOF_TESTE
+	lag_poll();
+#endif
 	u8 b[1500]; struct sockaddr_in de; int dl;
 	for (int k = 0; k < 64; k++) {
 		dl = sizeof de;
@@ -535,13 +592,14 @@ void rede_poll(void)
 		if (ag - t_ola >= OPEN_T && (ncand || par_ok)) { t_ola = ag; manda_ola(); if (vi_par) manda_ping(); }
 		if (rede_estado == REDE_PAREANDO && rede_anfitriao && par_me_ve && (pongs >= 4 || ag - t_pareou > 2500) && ag - t_inicio_envio >= 250) {
 			if (rede_atraso_cfg > 0) rede_atraso = rede_atraso_cfg;
-			else { rede_atraso = (rede_ping / 2 + 16) / 17 + 1; if (rede_atraso < 2) rede_atraso = 2; if (rede_atraso > 10) rede_atraso = 10; }
+			else rede_atraso = rede_ping < 80 ? 2 : rede_ping < 160 ? 3 : 4;   // com rollback o atraso fixo pode ser pequeno
 			manda_inicio(); t_inicio_envio = ag;
 		}
 		if (rede_estado == REDE_ENTRANDO && ag - t_ultimo_rx > 40000) { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "Não consegui chegar no anfitrião (roteador bloqueando). Plano B: Radmin VPN e ip:porta."); }
 	} else {
 		if (ag - t_ping >= 1000) { t_ping = ag; manda_ping(); }
 		if (ag - t_envio >= 30) manda_entradas();
+		if (chat_reenvia && ag - t_chat >= 150) { envia(chat_pkt, chat_pkt_n); t_chat = ag; chat_reenvia--; }
 		if (ag - t_ultimo_rx > 10000) { rede_ativa = 0; rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "Conexão perdida"); extern void frontend_online_caiu(void); frontend_online_caiu(); }
 	}
 }
@@ -567,7 +625,35 @@ const char *rede_status(void)
 int rede_porta_local(void) { return porta_local; }
 
 // ---------------------------------------------------------------- lockstep
-int rede_pode(void) { return rede_ativa && rem_tem_ate > quadro ? (int)(rem_tem_ate - quadro) : 0; }
+int rede_pode(void)
+{
+	if (!rede_ativa) return 0;
+	if (!rede_previsao) return rem_tem_ate > quadro ? (int)(rem_tem_ate - quadro) : 0;   // lockstep puro (menus, ORDER SELECT)
+	if (quadro >= rem_tem_ate + REDE_JANELA) return 0;                                   // o outro lado ficou longe demais: espera
+	// sincronia de tempo: o quadro do outro lado é ~ rem_tem_ate - atraso; se estou na frente, cedo 1 quadro a cada 4
+	int avanco = (int)quadro - ((int)rem_tem_ate - rede_atraso);
+	if (avanco >= 2 && (quadro & 3) == 0 && cedido_em != quadro) { cedido_em = quadro; return 0; }
+	int n = rem_tem_ate > quadro ? (int)(rem_tem_ate - quadro) : 1;
+	return n > 2 ? 2 : n;
+}
+int rede_quadro_real(u32 q) { return !rede_ativa || q < rem_tem_ate; }   // quadro simulado com a entrada real do outro lado?
+int rede_rollback(void)
+{
+	int k = rollback_para; rollback_para = -1;
+	if (k >= 0) rede_rollbacks++;
+#ifdef KOF_TESTE
+	if (k >= 0 && getenv("KOF_DEBUG_REDE")) fprintf(stderr, "rollback -> %d (quadro %u, rem_tem_ate %u, profundidade %u)\n", k, quadro, rem_tem_ate, quadro - (u32)k);
+#endif
+	return k;
+}
+void rede_entradas_de(u32 q, u8 *p1, u8 *x1, u8 *p2, u8 *x2)
+{
+	u8 lp = loc_p[q % RING], lx = loc_x[q % RING], rp, rx;
+	if (q < rem_tem_ate) { rp = rem_p[q % RING]; rx = rem_x[q % RING]; }
+	else { rp = rem_ult_p; rx = 0; }                     // previsão: repete o direcional/botões; Start e menu não se prevê
+	usado_p[q % RING] = rp; usado_x[q % RING] = rx; usado_q[q % RING] = q;
+	if (rede_anfitriao) { *p1 = lp; *x1 = lx; *p2 = rp; *x2 = rx; } else { *p1 = rp; *x1 = rx; *p2 = lp; *x2 = lx; }
+}
 int rede_esperando(void) { return (int)esperando_n; }
 void rede_conta_espera(int parado) { esperando_n = parado ? esperando_n + 1 : 0; }
 u32 rede_quadro(void) { return quadro; }
@@ -576,20 +662,61 @@ void rede_passo(u8 meu_p, u8 meu_x, u8 *p1, u8 *x1, u8 *p2, u8 *x2)
 	u32 w = quadro + (u32)rede_atraso;
 	if (rede_escolha_pendente >= 0 && rede_anfitriao) { meu_x |= REDE_X_MENU | (u8)(rede_escolha_pendente << 4); rede_escolha_pendente = -1; }
 	loc_p[w % RING] = meu_p; loc_x[w % RING] = meu_x; loc_prox = w + 1;
-	u8 lp = loc_p[quadro % RING], lx = loc_x[quadro % RING], rp = rem_p[quadro % RING], rx = rem_x[quadro % RING];
-	if (rede_anfitriao) { *p1 = lp; *x1 = lx; *p2 = rp; *x2 = rx; } else { *p1 = rp; *x1 = rx; *p2 = lp; *x2 = lx; }
+	rede_entradas_de(quadro, p1, x1, p2, x2);
 	quadro++;
 	manda_entradas();
 }
-void rede_depois_quadro(void)
+void rede_hash_depois(u32 qn)
 {
-	if (!rede_ativa || quadro % 120 != 0) return;
-	extern unsigned int m68k_read_memory_16(unsigned int);
-	u32 h = 2166136261u;
-	for (u32 a = 0x100000; a < 0x110000; a += 2) { h ^= m68k_read_memory_16(a); h *= 16777619u; }
-	int i = (int)((quadro / 120) % 16);
-	meu_crc_q[i] = quadro; meu_crc[i] = h; crc_envia_q = quadro; crc_envia = h;
 #ifdef KOF_TESTE
-	if (getenv("KOF_DEBUG_REDE")) fprintf(stderr, "crc q=%u %08x par=%s:%d\n", quadro, h, inet_ntoa(par.sin_addr), ntohs(par.sin_port));
+	{   // KOF_DEBUG_QUADROS=ini,fim: hash + entradas de cada quadro nesse intervalo (N = normal, R = re-simulado)
+		static int ini = -2, fim; if (ini == -2) { ini = -1; const char *e = getenv("KOF_DEBUG_QUADROS"); if (e) sscanf(e, "%d,%d", &ini, &fim); }
+		if (rede_ativa && ini >= 0 && (int)qn >= ini && (int)qn <= fim) {
+			extern unsigned int m68k_read_memory_16(unsigned int); u32 h = 2166136261u;
+			for (u32 a = 0x100000; a < 0x110000; a += 2) { h ^= m68k_read_memory_16(a); h *= 16777619u; }
+			u32 q = qn - 1; fprintf(stderr, "Q %u %08x loc %02x rem %02x/%02x real %d\n", qn, h, loc_p[q % RING], usado_p[q % RING], usado_x[q % RING], q < rem_tem_ate);
+		}
+	}
+#endif
+	if (!rede_ativa || qn % 120 != 0) return;
+	extern unsigned int m68k_read_memory_16(unsigned int);
+#ifdef KOF_TESTE
+	if (getenv("KOF_DEBUG_RAMDUMP")) {   // despeja a RAM do 68k (prefixo_q.bin; a última gravação do quadro é a definitiva)
+		char nome[300]; snprintf(nome, sizeof nome, "%s_%u.bin", getenv("KOF_DEBUG_RAMDUMP"), qn);
+		FILE *f = fopen(nome, "wb");
+		if (f) { for (u32 a = 0x100000; a < 0x110000; a += 2) { u16 w = (u16)m68k_read_memory_16(a); fputc(w >> 8, f); fputc(w & 255, f); } fclose(f); }
+	}
+#endif
+	u32 h = 2166136261u;
+	for (u32 a = 0x100000; a < 0x10F000; a += 2) { h ^= m68k_read_memory_16(a); h *= 16777619u; }   // só a RAM de trabalho: 0x10F000+ é da BIOS (pilha com lixo abaixo do SP difere entre os lados sem ser dessincronia)
+	int i = (int)((qn / 120) % 16);
+	meu_crc_q[i] = qn; meu_crc[i] = h;
+#ifdef KOF_TESTE
+	if (getenv("KOF_DEBUG_REDE")) fprintf(stderr, "crc q=%u %08x (rem_tem_ate %u, rollbacks %d)\n", qn, h, rem_tem_ate, rede_rollbacks);
 #endif
 }
+void rede_checa_crc(void)
+{
+	if (!rede_ativa) return;
+	for (int k = 0; k < par_crc_n; k++) {
+		u32 cq = par_crc_q[k];
+		if (cq > quadro || cq > rem_tem_ate || rollback_para >= 0) continue;     // ainda não é definitivo do meu lado
+		int achei = -1; for (int i = 0; i < 16; i++) if (meu_crc_q[i] == cq) achei = i;
+		if (achei < 0 && quadro > cq + 16 * 120) { memmove(par_crc_q + k, par_crc_q + k + 1, (size_t)(par_crc_n - k - 1) * 4); memmove(par_crc_v + k, par_crc_v + k + 1, (size_t)(par_crc_n - k - 1) * 4); par_crc_n--; k--; continue; }
+		if (achei < 0) continue;
+		crc_comparado = cq;
+		if (meu_crc[achei] != par_crc_v[k]) { if (++crc_ruins >= 2) rede_dessincronizou = 1; } else crc_ruins = 0;
+		memmove(par_crc_q + k, par_crc_q + k + 1, (size_t)(par_crc_n - k - 1) * 4); memmove(par_crc_v + k, par_crc_v + k + 1, (size_t)(par_crc_n - k - 1) * 4); par_crc_n--; k--;
+	}
+}
+void rede_chat_envia(const char *s)
+{
+	if (!rede_ativa || !s[0]) return;
+	int len = (int)strlen(s); if (len > 71) len = 71;
+	chat_pkt[0] = 'K'; chat_pkt[1] = 'N'; chat_pkt[2] = T_CHAT; es32(chat_pkt + 3, ++chat_id); chat_pkt[7] = (u8)len; memcpy(chat_pkt + 8, s, (size_t)len);
+	chat_pkt_n = 8 + len; envia(chat_pkt, chat_pkt_n); t_chat = SDL_GetTicks(); chat_reenvia = 3;
+	if (rede_chat_n == REDE_CHAT_N) { memmove(rede_chat, rede_chat + 1, sizeof(RedeChat) * (REDE_CHAT_N - 1)); rede_chat_n--; }
+	memcpy(rede_chat[rede_chat_n].texto, s, (size_t)len); rede_chat[rede_chat_n].texto[len] = 0;
+	rede_chat[rede_chat_n].t = SDL_GetTicks(); rede_chat[rede_chat_n].de_mim = 1; rede_chat_n++;
+}
+void rede_depois_quadro(void) { rede_hash_depois(quadro); }

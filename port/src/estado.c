@@ -44,6 +44,7 @@ void estado_mem_salvar(void)
 	mem.pos = 0; mem.salvar = 1; mem.erro = 0;
 	tudo(&mem);
 }
+size_t estado_mem_tam(void) { return mem.pos; }
 void estado_mem_carregar(void)
 {
 	size_t cap = mem.cap, tam = mem.pos;
@@ -51,6 +52,29 @@ void estado_mem_carregar(void)
 	tudo(&mem);
 	mem.cap = cap;
 }
+
+// rollback online: estado no início de cada quadro, num anel (o mais velho é sobrescrito)
+#define RING_EST 16
+static Estado anel[RING_EST]; static u32 anel_q[RING_EST]; static int anel_ok[RING_EST];
+void estado_ring_salvar(u32 q)
+{
+	Estado *e = &anel[q % RING_EST];
+	e->pos = 0; e->salvar = 1; e->erro = 0;
+	tudo(e);
+	anel_q[q % RING_EST] = q; anel_ok[q % RING_EST] = 1;
+}
+int estado_ring_carregar(u32 q)
+{
+	int i = (int)(q % RING_EST);
+	if (!anel_ok[i] || anel_q[i] != q) return 1;
+	Estado *e = &anel[i];
+	size_t cap = e->cap, tam = e->pos;
+	e->cap = tam; e->pos = 0; e->salvar = 0; e->erro = 0;
+	tudo(e);
+	e->cap = cap;
+	return e->erro;
+}
+void estado_ring_limpa(void) { memset(anel_ok, 0, sizeof anel_ok); }
 
 int estado_salvar(const char *arq)
 {

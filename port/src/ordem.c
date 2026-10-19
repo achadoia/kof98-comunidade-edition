@@ -75,6 +75,7 @@ static void monta_seq(int j, int l)
 static int toques_modo(int m) { return m == 2 ? 1 : m == 1 ? 2 : 0; }
 
 int ordem_ativa(void) { return ativo; }
+int ordem_na_tela(void) { return ordem_ligada && rd(RAM_TELA_ORD) == 0x10; }
 // 1 enquanto a tela mostra as colunas congeladas (as fotos devem usar ordem_ovl, não o quadro atual)
 int ordem_mostra_congelado(void)
 {

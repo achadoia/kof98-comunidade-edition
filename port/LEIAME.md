@@ -110,6 +110,26 @@ interface (`tela_ui`, transparente: treino, F1, tela de ordem). Alvos com `sem_f
 só foto. Artes da tela de ordem (96x96, uma por personagem, as 3 posições) estão mapeadas mas desligadas a pedido do
 usuário. Lab: `KOF_MAPA` + roteiro Team VS; na seleção o cursor anda sozinho uma casa pra direita a cada escolha.
 
+### Online: rollback (v1.8.0, 19/10)
+Fora dos menus o jogo não espera mais a entrada do outro lado: anda prevendo (repete a última entrada remota),
+guarda o estado do início de cada quadro num anel (`estado_ring_*`, 16 × ~220 KB) e, quando a entrada real chega
+diferente, volta ao quadro errado e re-simula até o atual (`resimula_rede` em main.c; som desses quadros descartado).
+Até `REDE_JANELA` = 8 quadros à frente do outro; mais que isso espera. Atraso fixo automático: 2 (ping < 80), 3 (< 160), 4.
+Sincronia de tempo: quem está ≥ 2 quadros na frente cede 1 quadro a cada 4. Menus, piloto e ORDER SELECT continuam
+lockstep puro (módulos com estado próprio fora do savestate só agem em quadro confirmado: `rede_quadro_real`).
+Soma de verificação a cada 120 quadros só da RAM de trabalho 0x100000-0x10EFFF (0x10F000+ = BIOS/pilha, difere sem
+ser dessincronia) e só de quadros definitivos; aviso com 2 divergências seguidas. Hash da ROM inclui a BIOS.
+Bugs corrigidos que dessincronizavam de verdade: (1) o ajuste de "ritmo do monitor" rodava 2 quadros passando por
+cima do limite do lockstep; (2) `neo_quadros` não zerava na partida → fase do pulso de 1 Hz do relógio diferente nos
+dois lados → segundos da BIOS contados em quadros diferentes.
+Chat: tecla **T** na partida abre o campo (teclado do jogo fica bloqueado enquanto digita), Enter manda (pacote
+reenviado 3×), Esc cancela; mensagens dos últimos 10 s no canto inferior esquerdo.
+Lab (build `-DKOF_TESTE`, 2 instâncias `KOF_REDE=criar` / `KOF_REDE=entrar:127.0.0.1:7998`): `KOF_REDE_LAG=ms`,
+`KOF_REDE_PERDA=pct`, `KOF_REDE_RANDOM=1` (entradas aleatórias na luta = rollback o tempo todo), `KOF_DEBUG_REDE=1`
+(crc/rollbacks), `KOF_DEBUG_QUADROS=ini,fim` (hash + entradas por quadro), `KOF_DEBUG_RAMDUMP=prefixo` (RAM a cada
+120 quadros pra diff), `KOF_TESTE_ROLLBACK=1` no modo sem janela (salva/volta/re-simula e compara: 0 divergências em
+4000 quadros). Matar `kof98_dev.exe` antes de repetir (porta 7998 presa faz o anfitrião cair na 7999).
+
 ### Trilha trocável (`bin/som/musica/`)
 Arquivo `.ogg`/`.mp3`/`.wav` com o nome começando pelo código da música (`28.ogg`, `"32 Esaka.mp3"`) toca no
 lugar da música do chip; sem arquivo, toca a original. F1 → Som: liga/desliga, "Reler a pasta" e

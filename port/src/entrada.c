@@ -100,10 +100,11 @@ int entrada_indice_instancia(SDL_JoystickID id)
 	return 0;
 }
 
+int entrada_teclado_bloqueado;
 int entrada_ligacao_ativa(const Ligacao *l)
 {
 	switch (l->tipo) {
-	case LIG_TECLA: { const Uint8 *k = SDL_GetKeyboardState(NULL); return l->cod >= 0 && l->cod < SDL_NUM_SCANCODES && k[l->cod]; }
+	case LIG_TECLA: { if (entrada_teclado_bloqueado) return 0; const Uint8 *k = SDL_GetKeyboardState(NULL); return l->cod >= 0 && l->cod < SDL_NUM_SCANCODES && k[l->cod]; }
 	case LIG_BOTAO: return l->disp < nctrl && ctrl[l->disp] && SDL_JoystickGetButton(ctrl[l->disp], l->cod);
 	case LIG_EIXO: {
 		if (l->disp >= nctrl || !ctrl[l->disp]) return 0;
