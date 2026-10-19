@@ -34,16 +34,42 @@ static void reabre(void)
 	}
 }
 
+// Banco de mapeamentos da comunidade (SDL_GameControllerDB, só Windows): controle que o SDL não conhece de
+// fábrica passa a ser reconhecido com os botões de nome fixo. Arquivo controles/gamecontrollerdb.txt ao lado
+// do EXE (build normal) ou embutido (EXE único); o usuário ainda pode pôr um gamecontrollerdb.txt ao lado.
+#ifdef KOF_SOLO
+extern const unsigned char embutido_gcdb[]; extern const size_t embutido_gcdb_tam;
+#endif
+static void carrega_mapeamentos(void)
+{
+	int n = 0;
+#ifdef KOF_SOLO
+	SDL_RWops *rw = SDL_RWFromConstMem(embutido_gcdb, (int)embutido_gcdb_tam);
+	if (rw) n += SDL_GameControllerAddMappingsFromRW(rw, 1);
+#endif
+	char *bp = SDL_GetBasePath(); char arq[700];
+	snprintf(arq, sizeof arq, "%scontroles/gamecontrollerdb.txt", bp ? bp : "");
+	int a = SDL_GameControllerAddMappingsFromFile(arq); if (a > 0) n += a;
+	snprintf(arq, sizeof arq, "%sgamecontrollerdb.txt", bp ? bp : "");
+	a = SDL_GameControllerAddMappingsFromFile(arq); if (a > 0) n += a;
+	SDL_free(bp);
+	if (getenv("KOF_DEBUG_ENTRADA")) fprintf(stderr, "mapeamentos de controle carregados: %d\n", n);
+}
+
 void entrada_init(void)
 {
+	carrega_mapeamentos();
 	if (getenv("KOF_SEM_CONTROLE")) return;   // teste: ignora os controles ligados (um controle com botão preso fecha o menu da foto)
 	SDL_JoystickEventState(SDL_ENABLE);
 	SDL_GameControllerEventState(SDL_ENABLE);
 	reabre();
 	if (getenv("KOF_DEBUG_ENTRADA"))
 		for (int i = 0; i < nctrl; i++)
-			fprintf(stderr, "controle %d: %s (%d botões) %s\n", i, SDL_JoystickName(ctrl[i]), SDL_JoystickNumButtons(ctrl[i]),
-				gc[i] ? "reconhecido (game controller)" : "joystick cru");
+			{
+			char guid[64]; SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(ctrl[i]), guid, sizeof guid);
+			fprintf(stderr, "controle %d: %s (%d botões, %d eixos, %d hats) guid %s %s\n", i, SDL_JoystickName(ctrl[i]), SDL_JoystickNumButtons(ctrl[i]),
+				SDL_JoystickNumAxes(ctrl[i]), SDL_JoystickNumHats(ctrl[i]), guid, gc[i] ? "reconhecido (game controller)" : "joystick cru");
+		}
 }
 
 void entrada_evento(const SDL_Event *e)

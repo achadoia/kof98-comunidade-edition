@@ -34,6 +34,13 @@ Teste: build `-DKOF_TESTE` com `KOF_CFG=1..4` / `KOF_TREINO=menu=1`, `KOF_JANELA
   por textura em blend multiplicativo), proporção (4:3, pixel inteiro, tela toda), laterais borradas,
   tela cheia, vsync, FPS.
 - **Controles**: por jogador; Enter numa ação grava a próxima tecla/botão/eixo/direcional (Del apaga);
+  5 ligações por ação, uma por tipo (teclado / botão e eixo do controle reconhecido / botão-hat e eixo de stick cru).
+  19/10 (v1.7.1): controle que o SDL não reconhece (arcade por USB, gamepad genérico) agora funciona de fábrica pelo
+  joystick cru (hat + eixos 0/1 + botões 0-7) — antes só tinha os botões, sem direcional. Banco de mapeamentos da
+  comunidade (`controles/gamecontrollerdb.txt`, SDL_GameControllerDB filtrado pra Windows, embutido no EXE único;
+  um `gamecontrollerdb.txt` ao lado do EXE também é lido). Hints: thread de joystick ligada, rawinput desligado.
+  Diagnóstico: F1 → Controles mostra "controle N ok/cru" + o que está apertado; `KOF_DEBUG_ENTRADA=1` imprime
+  nome, GUID, botões/eixos/hats e cada evento.
   "Configurar tudo" pede uma por uma; a ação acende em verde quando apertada (teste ao vivo);
   até 3 ligações por ação (teclado + controle); restaurar padrão.
 - **Som**: volume, mudo.

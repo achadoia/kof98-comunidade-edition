@@ -32,5 +32,6 @@ else
 fi
 mkdir -p bin/arte   # arte do menu inicial: PNG no git, BMP ao lado do EXE (SDL lê BMP sem biblioteca extra)
 if [ arte/menu_fundo.png -nt bin/arte/menu_fundo.bmp ] && command -v ffmpeg >/dev/null; then ffmpeg -y -loglevel error -i arte/menu_fundo.png -pix_fmt bgr24 bin/arte/menu_fundo.bmp; fi
-for f in arte/hd_*.png; do cp -u "$f" bin/arte/; done   # artes dos menus F1/F6 (build normal lê da pasta; SOLO embute)
+for f in arte/hd_*.png; do cp -u "$f" bin/arte/; done
+mkdir -p bin/controles && cp -u controles/gamecontrollerdb.txt bin/controles/   # mapeamentos de controle (build normal lê da pasta; SOLO embute)   # artes dos menus F1/F6 (build normal lê da pasta; SOLO embute)
 echo "ok: bin/${SAIDA:-kof98.exe}"

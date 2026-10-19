@@ -6,7 +6,7 @@ enum { AC_CIMA, AC_BAIXO, AC_ESQ, AC_DIR, AC_A, AC_B, AC_C, AC_D, AC_START, AC_M
 enum { LIG_NADA, LIG_TECLA, LIG_BOTAO, LIG_EIXO, LIG_HAT, LIG_GCBOTAO, LIG_GCEIXO };   // GC = game controller (botão com nome fixo)
 
 typedef struct { u8 tipo, disp; s16 cod; s8 val; } Ligacao;   // val: sinal do eixo / direção do hat
-#define NLIG 3                                              // até 3 ligações por ação
+#define NLIG 5                                              // ligações por ação: 0 teclado, 1 botão / 2 eixo do controle reconhecido, 3 botão|hat / 4 eixo de stick cru
 
 enum { FILTRO_NITIDO, FILTRO_SUAVE, FILTRO_LINHAS, FILTRO_TUBO, FILTRO_ARCADE, FILTRO_XBR, NFILTROS };
 enum { PROP_4X3, PROP_INTEIRA, PROP_ESTICAR, NPROP };

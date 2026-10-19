@@ -512,6 +512,8 @@ int main(int argc, char **argv)
 
 	// ------------------------------------------------------------ janela
 	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+	SDL_SetHint(SDL_HINT_JOYSTICK_THREAD, "1");                 // sticks DirectInput (arcade por USB) lidos numa thread própria
+	SDL_SetHint(SDL_HINT_JOYSTICK_RAWINPUT, "0");               // rawinput some com controle em alguns PCs (SDL 2.30): fica DirectInput/XInput
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
 	rede_init();
 	SDL_Rect util = {0, 0, 1280, 720};
@@ -520,7 +522,7 @@ int main(int argc, char **argv)
 	if ((util.w * 85 / 100) / NEO_W < escala) escala = (util.w * 85 / 100) / NEO_W;
 	if (escala < 1) escala = 1;
 	const char *autofoto = getenv("KOF_AUTOFOTO");      // "quadros,arquivo.bmp": captura a saída final e sai
-	if (autofoto) config_somente_leitura = 1;           // o menu salva a cada mudança: teste não pode gravar no kof98.ini do usuário
+	if (autofoto && !getenv("KOF_SALVA_CFG")) config_somente_leitura = 1;           // o menu salva a cada mudança: teste não pode gravar no kof98.ini do usuário
 	if (getenv("KOF_MUDO")) cfg.mudo = 1;
 	if (getenv("KOF_VSYNC")) cfg.vsync = atoi(getenv("KOF_VSYNC"));
 	if (getenv("KOF_FILTRO")) cfg.filtro = atoi(getenv("KOF_FILTRO")) % NFILTROS;
@@ -799,7 +801,7 @@ int main(int argc, char **argv)
 			else if (agora - proximo > passo * 5) proximo = agora;
 		}
 	}
-	if (!autofoto) config_salvar(cfg_arquivo);   // testes automáticos não mexem na config do usuário
+	if (!autofoto || getenv("KOF_SALVA_CFG")) config_salvar(cfg_arquivo);   // testes automáticos não mexem na config do usuário
 	rede_fim();
 	SDL_Quit();
 	return 0;

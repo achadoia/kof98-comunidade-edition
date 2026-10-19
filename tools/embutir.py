@@ -37,6 +37,7 @@ def main():
     icone = open(os.path.join(RAIZ, "port", "arte", "icone_64.png"), "rb").read()
     fotos = open(os.path.join(RAIZ, "port", "bin", "arte", "fotos.bin"), "rb").read()
     overlay = open(os.path.join(RAIZ, "port", "bin", "arte", "overlay.bin"), "rb").read()
+    gcdb = open(os.path.join(RAIZ, "port", "controles", "gamecontrollerdb.txt"), "rb").read()
     hd = {n: open(os.path.join(RAIZ, "port", "arte", a), "rb").read() for n, a in
           [("hd_cfg_png", "hd_cfg_fundo.png"), ("hd_treino_png", "hd_treino_titulo.png"), ("hd_dpad_png", "hd_dpad.png"), ("hd_b_png", "hd_botao_b.png")]}
     patches = []
@@ -62,6 +63,7 @@ def main():
         f.write(f"const unsigned char embutido_patches[] = {{\n{bytes_c(blob)}\n}};\nconst size_t embutido_patches_tam = {len(blob)};\n")
         f.write(f"const unsigned char embutido_fotos[] = {{\n{bytes_c(fotos)}\n}};\nconst size_t embutido_fotos_tam = {len(fotos)};\n")
         f.write(f"const unsigned char embutido_overlay[] = {{\n{bytes_c(overlay)}\n}};\nconst size_t embutido_overlay_tam = {len(overlay)};\n")
+        f.write(f"const unsigned char embutido_gcdb[] = {{\n{bytes_c(gcdb)}\n}};\nconst size_t embutido_gcdb_tam = {len(gcdb)};\n")
         for n, d in hd.items():    # artes dos menus F1/F6 (src/hd.c)
             f.write(f"const unsigned char embutido_{n}[] = {{\n{bytes_c(d)}\n}};\nconst size_t embutido_{n}_tam = {len(d)};\n")
     print(f"embutido.c: menu {len(png)} B, retratos {len(tiles)} B, fotos {len(fotos)} B, overlay {len(overlay)} B, {len(patches)} patches ({len(blob)} B)")

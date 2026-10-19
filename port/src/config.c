@@ -34,6 +34,19 @@ static void liga_eixo(int j, int a, int slot, int d, int e, int s) { cfg.lig[j][
 static void liga_gc(int j, int a, int slot, int d, int b) { cfg.lig[j][a][slot] = (Ligacao){LIG_GCBOTAO, (u8)d, (s16)b, 0}; }
 static void liga_gce(int j, int a, int slot, int d, int e, int s) { cfg.lig[j][a][slot] = (Ligacao){LIG_GCEIXO, (u8)d, (s16)e, (s8)s}; }
 
+// stick/gamepad que o SDL NÃO reconhece (sem mapeamento): slots 3 e 4 = joystick cru — hat e eixos 0/1 no
+// direcional, botões na numeração mais comum (DirectInput: 0-3 = ataques, 4/5 ombros, 6/7 select/start)
+static void controles_cru_padrao(int j)
+{
+	liga_hat(j, AC_CIMA, 3, j, SDL_HAT_UP); liga_hat(j, AC_BAIXO, 3, j, SDL_HAT_DOWN);
+	liga_hat(j, AC_ESQ, 3, j, SDL_HAT_LEFT); liga_hat(j, AC_DIR, 3, j, SDL_HAT_RIGHT);
+	liga_eixo(j, AC_CIMA, 4, j, 1, -1); liga_eixo(j, AC_BAIXO, 4, j, 1, 1);
+	liga_eixo(j, AC_ESQ, 4, j, 0, -1); liga_eixo(j, AC_DIR, 4, j, 0, 1);
+	liga_botao(j, AC_A, 3, j, 2); liga_botao(j, AC_B, 3, j, 3); liga_botao(j, AC_C, 3, j, 0); liga_botao(j, AC_D, 3, j, 1);
+	liga_botao(j, AC_START, 3, j, 7); liga_botao(j, AC_MOEDA, 3, j, 6);
+	liga_botao(j, AC_AB, 3, j, 4); liga_botao(j, AC_CD, 3, j, 5);
+}
+
 void config_controles_padrao(int j)
 {
 	memset(cfg.lig[j], 0, sizeof cfg.lig[j]);
@@ -54,9 +67,7 @@ void config_controles_padrao(int j)
 	liga_gc(j, AC_C, 1, j, SDL_CONTROLLER_BUTTON_A); liga_gc(j, AC_D, 1, j, SDL_CONTROLLER_BUTTON_B);
 	liga_gc(j, AC_START, 1, j, SDL_CONTROLLER_BUTTON_START); liga_gc(j, AC_MOEDA, 1, j, SDL_CONTROLLER_BUTTON_BACK);
 	liga_gc(j, AC_AB, 1, j, SDL_CONTROLLER_BUTTON_LEFTSHOULDER); liga_gc(j, AC_CD, 1, j, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
-	liga_botao(j, AC_A, 2, j, 2); liga_botao(j, AC_B, 2, j, 3); liga_botao(j, AC_C, 2, j, 0); liga_botao(j, AC_D, 2, j, 1);
-	liga_botao(j, AC_START, 2, j, 7); liga_botao(j, AC_MOEDA, 2, j, 6);
-	liga_botao(j, AC_AB, 2, j, 4); liga_botao(j, AC_CD, 2, j, 5);
+	controles_cru_padrao(j);
 }
 
 void config_padrao(void)
@@ -186,6 +197,21 @@ static void migra_controle(int j)
 	for (int a = 0; a < NACOES; a++) cfg.lig[j][a][0] = tecl[a];   // teclado do usuário fica
 }
 
+// Configs de antes de 19/10 tinham 3 ligações por ação e NENHUM direcional de stick cru (quem não era
+// reconhecido pelo SDL ficava sem andar). Se os slots 3/4 estão todos vazios, recebem o padrão cru.
+static void completa_cru(int j)
+{
+	for (int a = 0; a < NACOES; a++) if (cfg.lig[j][a][3].tipo || cfg.lig[j][a][4].tipo) return;
+	for (int a = 0; a < NACOES; a++)        // botão cru que antes morava no slot 2 passa pro 3
+		if (cfg.lig[j][a][2].tipo == LIG_BOTAO || cfg.lig[j][a][2].tipo == LIG_HAT || cfg.lig[j][a][2].tipo == LIG_EIXO) { cfg.lig[j][a][3] = cfg.lig[j][a][2]; memset(&cfg.lig[j][a][2], 0, sizeof(Ligacao)); }
+	Ligacao guarda[NACOES][NLIG];
+	memcpy(guarda, cfg.lig[j], sizeof guarda);
+	controles_cru_padrao(j);
+	for (int a = 0; a < NACOES; a++)
+		for (int k = 0; k < NLIG; k++)
+			if (guarda[a][k].tipo || k < 3) cfg.lig[j][a][k] = guarda[a][k];
+}
+
 int config_carregar(const char *arq)
 {
 	config_padrao();
@@ -234,6 +260,8 @@ int config_carregar(const char *arq)
 	fclose(f);
 	migra_controle(0);
 	migra_controle(1);
+	completa_cru(0);
+	completa_cru(1);
 	cfg.cpu = 200;   // fixo: sem a lentidão do Neo Geo
 	if (cfg.volume < 0 || cfg.volume > 100) cfg.volume = 80;
 	return 0;

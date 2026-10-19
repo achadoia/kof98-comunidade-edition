@@ -95,13 +95,16 @@ static void confirma(void)
 	muda(1);
 }
 
-// guarda a ligação capturada: teclado no slot 0, controle no 1 (ou 2 se o 1 já for de outro tipo)
+// guarda a ligação capturada no slot do seu tipo: 0 teclado, 1 botão / 2 eixo do controle reconhecido,
+// 3 botão ou hat / 4 eixo de stick cru (cada tipo tem o seu lugar, nada se perde)
+static int slot_de(int tipo)
+{
+	switch (tipo) { case LIG_TECLA: return 0; case LIG_GCBOTAO: return 1; case LIG_GCEIXO: return 2; case LIG_EIXO: return 4; default: return 3; }
+}
 static void grava_ligacao(Ligacao l)
 {
 	Ligacao *s = cfg.lig[jogador][capturando];
-	if (l.tipo == LIG_TECLA) s[0] = l;
-	else if (s[1].tipo == LIG_NADA || s[1].tipo == l.tipo || s[2].tipo != LIG_NADA) { s[1] = l; if (l.tipo == LIG_HAT) memset(&s[2], 0, sizeof(Ligacao)); }
-	else s[2] = l;
+	s[slot_de(l.tipo)] = l;
 	salva();
 	if (assistente && capturando + 1 < NACOES) capturando++;
 	else { capturando = -1; if (assistente) aviso("controles gravados!"); assistente = 0; }
@@ -280,7 +283,11 @@ void menu_cfg_desenha_hd(void)
 			char d1[32] = "", d2[32] = "", tudo[80];
 			const Ligacao *L = cfg.lig[jogador][a];
 			config_descreve(&L[0], d1, sizeof d1);
-			config_descreve(L[1].tipo ? &L[1] : &L[2], d2, sizeof d2);
+			{   // mostra a ligação que vale pro controle ligado: reconhecido = slots 1/2, cru = 3/4
+				int cru = entrada_num_controles() > jogador && !entrada_reconhecido(jogador);
+				const Ligacao *c = cru ? (L[3].tipo ? &L[3] : &L[4]) : (L[1].tipo ? &L[1] : &L[2]);
+				config_descreve(c, d2, sizeof d2);
+			}
 			if (capturando == a) snprintf(tudo, sizeof tudo, "aperte...");
 			else snprintf(tudo, sizeof tudo, "%s / %s", d1, d2);
 			if ((int)strlen(tudo) > 26) tudo[26] = 0;
