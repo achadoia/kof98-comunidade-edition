@@ -19,7 +19,7 @@ import sys
 RAIZ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 TABELAS = ((0x0B4568, str.ljust), (0x0B48D6, str.rjust))
 NREG = 60
-CAVE_NOMES = 0x0F6800            # área livre pra registros maiores (gerar_rom recusa sobreposição)
+CAVE_NOMES = 0x0A7C00            # área livre (0xFF) pra registros maiores: 0xA7C00-0xA7DFF; o 0xF6800 do hack NÃO era livre (código do ae)
 PREFIXO_1LINHA = {str.ljust: b"pz)", str.rjust: b"s\xda9"}
 PREFIXO_2LINHAS = {str.ljust: b"py)", str.rjust: b"s\xd99"}
 
@@ -37,7 +37,7 @@ def main():
         raise SystemExit("nome de 2 linhas: cada parte com até 8 letras; use uma linha só pra nomes maiores")
     p = open(os.path.join(RAIZ, "build", "kof98ae_p.bin"), "rb").read()
     patches = []
-    cave = CAVE_NOMES + 0x40 * (sum(map(ord, arquivo)) % 16)   # cada lutador num pedaço próprio (64 bytes)
+    cave = CAVE_NOMES + 0x40 * (sum(map(ord, arquivo)) % 8)   # cada lutador num pedaço próprio (64 bytes)
     for base, alinha in TABELAS:
         velho = texto(antigo, alinha)
         achados = []

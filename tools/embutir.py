@@ -12,7 +12,7 @@ import os
 
 RAIZ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 PATCHES = ["chizuru_ae", "inbloqueavel_ae", "extra_pulinho_ae", "levantar_ae", "frota_ae",
-           "nome_terry_ae", "nome_daimon_ae", "nome_saisyu_ae", "nome_iori_ae", "nome_ralf_ae", "nome_chizuru_ae", "cenario_carros_ae"]
+           "nome_terry_ae", "nome_daimon_ae", "nome_saisyu_ae", "nome_iori_ae", "nome_ralf_ae", "nome_chizuru_ae", "cenario_carros_ae", "hud_terry_ae"]
 
 
 def arquivo(addr):

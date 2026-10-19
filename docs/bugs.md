@@ -78,7 +78,7 @@ Lentidão: no MAME, Tab → Slider Controls → "Overclock CPU :maincpu" em 200%
 - Mais personagens via variantes e IDs novos (ex.: vaga 12 = Kasumi no ae); Chizuru continua 15.
 - Os 2 pontos de soma de barra 0x015606/0x015648 foram desviados pelo hack (rotinas no banco 1
   com condição `$7318(a4)`); o patch da Chizuru copia essas rotinas com a escala.
-- Área livre usada pelos patches: 0x09F000+ (0x0F6500 o hack usa).
+- Área livre usada pelos patches: 0x09F000+ (0x0F6500 o hack usa). Nomes (renomear*.py): 0xA7A00-0xA7DFF, única faixa comprovadamente 0xFF.
 - **Proteção do hack** em 0x09D8E6: soma das words de 0x000000-0x0FFFFF tem que dar 7, senão
   tela preta ao carregar a luta. `gerar_rom.py` compensa em 0x0A7E00.
 - Ferramentas: `KOF_VARIANTE=ae` em todos os tools/*.py; laboratório no MAME via lista local

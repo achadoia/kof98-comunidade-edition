@@ -90,7 +90,10 @@ O renderizador pinta tiles da ROM escolhidos (pelo código) com pixels ARGB pró
 pixel original). Terry Urameshi: grade da seleção (tiles 7B66-68/7B70-72, área 26x27 em x118-143 y14-40) e prévia
 do P1 (9F86-89 normal, F1EF-F2 segurando Start; x19-44 y184-210). Achar tiles: build de teste com
 `KOF_MAPA="quadro,arq.bin"` grava, por pixel, `código<<8 | linha<<4 | coluna` do tile que o pintou.
-Nome completo: `tools/renomear.py TERRY BOGARD URAMESHI` (campos fixos de 8 letras) -> patch `nome_terry_ae`.
+Nome completo: `tools/renomear.py "TERRY BOGARD" URATERRY terry` (campos fixos de 8 letras) -> patch `nome_terry_ae`.
+Nome curto do HUD na luta (texto da camada fixa, tiles 0x300+ASCII minúsculo, tabela de ponteiros 0x0B3E52):
+`tools/renomear_hud.py terry uraterry` -> patch `hud_terry_ae`. Registros que não cabem vão pra área livre REAL
+(só 0xFF) 0xA7A00-0xA7DFF; o 0xF6800+ usado antes era código do hack (Ralfecinha foi realocado em 19/10).
 
 ### Fotos em alta resolução (`tools/fotos.py` -> `bin/arte/overlay.bin` + `fotos.bin`)
 18/10: além da troca de tiles (pixelada), o renderizador anota por quadro onde os tiles de cada alvo do `retratos.json`
