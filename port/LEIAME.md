@@ -156,8 +156,12 @@ Build: `./build.sh` (Zig 0.13 em D:\Tools\zig + SDL2 2.30.9 mingw em D:\Tools).
 
 ## Jogo online (`src/rede.c`)
 
-Ponto a ponto por UDP (porta 7998+), sem servidor. Código da sala = IP público + porta (STUN em
-`stun.l.google.com`) + IP da rede local, 10 bytes em base32 sem letras ambíguas (16 caracteres). O anfitrião
+Ponto a ponto por UDP (porta 7998+). Endereço = IP público + porta (STUN em `stun.l.google.com`) + IP e porta
+da rede local, 12 bytes em base32 sem letras ambíguas (20 caracteres) — vai pro **cadastro de salas**
+`https://achadoia.com/api/kof/sala` (Next.js no repo achadoia-site, tabela `public.kof_salas` no Supabase pessoal,
+validade 2 h), que devolve o código curto de 3 números + 3 letras. O convidado consulta o código, recebe o
+endereço do anfitrião e registra o dele; o anfitrião consulta a cada 2 s e passa a mandar OLA pro convidado
+(furo do NAT dos dois lados, sem digitação). HTTPS pelo WinHTTP numa thread (`sala_poll`). O anfitrião também
 tenta abrir a porta por UPnP (SSDP + SOAP, numa thread). Pareamento: os dois mandam `OLA` pros endereços
 candidatos a cada 200 ms; quem recebe responde; PING/PONG mede a latência; o anfitrião manda `INICIO` com o
 atraso (automático = ping/2 em quadros + 1, mínimo 2) e o convidado responde `PRONTO`. Os dois então fazem
@@ -168,6 +172,15 @@ entradas (até 64, desde o último ack do outro lado), então perda de pacote n�
 quadros seguidos já têm entrada dos dois; o laço de `main.c` limita `passos` por isso. Byte extra por quadro:
 bit0 Start, bit1 "escolha do menu" (item nos bits 4-7) — assim a escolha do anfitrião no menu entre lutas chega
 nos dois lados no mesmo quadro. A cada 120 quadros vai um hash da RAM de trabalho (0x100000-0x10FFFF); se
-diferir, `rede_dessincronizou` acende o aviso. Na partida: run-ahead, treino, cenário fixo e reset desligados;
+diferir em 2 checagens seguidas, `rede_dessincronizou` acende o aviso (uma divergência isolada acontece
+no aperto de mão do som e some sozinha). Na partida: run-ahead, treino, cenário fixo e reset desligados;
 ordem por botão segue a config do anfitrião nos dois lados. Teste local (build KOF_TESTE):
 `KOF_REDE=criar` numa instância e `KOF_REDE=entrar:127.0.0.1:7998` em outra, `KOF_DEBUG_REDE=1` imprime o estado.
+
+## Auto-update (`src/atualiza.c`, versão em `src/versao.h`)
+
+Ao abrir (só no EXE SOLO, ou `KOF_ATUALIZA=1`), uma thread lê `api.github.com/repos/achadoia/kof98-comunidade-edition/releases/latest`;
+se `tag_name` > `KOF_VERSAO`, o menu mostra o aviso. ENTER baixa o asset `.exe` pra `<exe>.novo` (WinHTTP segue o
+redirect do GitHub), e quando termina o jogo grava `atualizar_kof98.bat` (espera o PID fechar, `move /y`, `start`) e
+sai. Teste: `KOF_VERSAO_FAKE=1.0.0` finge versão antiga. **Toda release precisa subir o `.exe` como asset e a tag
+`vX.Y.Z` igual a `versao.h`.**

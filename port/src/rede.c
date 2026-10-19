@@ -19,7 +19,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#define VERSAO_REDE 1
+#define VERSAO_REDE 2
 #define PORTA_BASE 7998
 #define RING 512
 #define OPEN_T 200
@@ -58,7 +58,7 @@ static u32 rem_q[RING];
 static u32 quadro, loc_prox, rem_tem_ate, par_ack;
 static u32 t_envio, esperando_n;
 static u32 meu_crc[16], meu_crc_q[16];
-static u32 crc_envia_q, crc_envia;
+static u32 crc_envia_q, crc_envia, crc_comparado = 0xffffffffu; static int crc_ruins;
 
 // ---------------------------------------------------------------- util
 static void le32(const u8 *p, u32 *v) { memcpy(v, p, 4); }
@@ -97,12 +97,128 @@ static int decodifica(const char *s, u8 *b, int nb)
 	}
 	return o == nb;
 }
-static void monta_codigo(void)
+// meu endereço (IP público + porta + IP local) em 16 letras: vai pro cadastro de salas, não pro jogador
+static char meu_endereco[24];
+static void monta_endereco(void)
 {
-	u8 b[10];
-	memcpy(b, &pub_ip, 4); memcpy(b + 4, &pub_porta, 2); memcpy(b + 6, &lan_ip, 4);
-	char s[24]; codifica(b, 10, s);
-	snprintf(rede_codigo, sizeof rede_codigo, "%.4s-%.4s-%.4s-%.4s", s, s + 4, s + 8, s + 12);
+	u8 b[12]; u16 pl = htons((u16)porta_local);
+	memcpy(b, &pub_ip, 4); memcpy(b + 4, &pub_porta, 2); memcpy(b + 6, &lan_ip, 4); memcpy(b + 10, &pl, 2);
+	codifica(b, 12, meu_endereco);           // 20 letras
+}
+static int endereco_para_candidatos(const char *end)
+{
+	u8 b[12] = {0};
+	int n = strlen(end) >= 20 ? 12 : 10;
+	if (!decodifica(end, b, n)) return 0;
+	struct sockaddr_in a = {0}; a.sin_family = AF_INET; ncand = 0;
+	memcpy(&a.sin_addr.s_addr, b, 4); memcpy(&a.sin_port, b + 4, 2); cand[ncand++] = a;
+	memcpy(&a.sin_addr.s_addr, b + 6, 4);
+	if (n == 12) memcpy(&a.sin_port, b + 10, 2);     // na rede local a porta é a do próprio EXE (o roteador pode trocar a pública)
+	if (a.sin_addr.s_addr && !mesmo(&a, &cand[0])) cand[ncand++] = a;
+	return 1;
+}
+
+// ---------------------------------------------------------------- cadastro de salas (achadoia.com/api/kof/sala, HTTPS via WinHTTP)
+// O código curto (3 números + 3 letras) é dado pelo site; ele guarda o endereço do anfitrião e, depois, o do
+// convidado — assim o anfitrião também manda OLA pro convidado (furo do NAT dos dois lados) sem ninguém digitar nada.
+#include <winhttp.h>
+static void manda_ola(void);
+#define SALA_HOST L"achadoia.com"
+#define SALA_PATH L"/api/kof/sala"
+enum { HTTP_NADA, HTTP_CRIAR, HTTP_CONSULTAR, HTTP_REGISTRAR };
+static volatile int http_ocupado, http_pronto;
+static int http_tipo, http_status;
+static char http_resp[2048], http_corpo[256];
+static wchar_t http_caminho[128];
+static char codigo_sala[8];                 // sala em uso (anfitrião: a minha; convidado: a digitada)
+static int registrado, convidado_ok, pedido_codigo, consultas;
+static u32 t_consulta;
+
+static int http_thread(void *arg)
+{
+	(void)arg;
+	http_status = 0; http_resp[0] = 0;
+	HINTERNET s = WinHttpOpen(L"KOF98CE/1.5", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+	HINTERNET c = s ? WinHttpConnect(s, SALA_HOST, INTERNET_DEFAULT_HTTPS_PORT, 0) : NULL;
+	int post = http_corpo[0] != 0;
+	HINTERNET r = c ? WinHttpOpenRequest(c, post ? L"POST" : L"GET", http_caminho, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE) : NULL;
+	if (r) {
+		DWORD to = 8000; WinHttpSetTimeouts(r, to, to, to, to);
+		const wchar_t *h = L"Content-Type: application/json\r\n";
+		if (WinHttpSendRequest(r, post ? h : WINHTTP_NO_ADDITIONAL_HEADERS, post ? (DWORD)-1 : 0, post ? http_corpo : WINHTTP_NO_REQUEST_DATA, post ? (DWORD)strlen(http_corpo) : 0, post ? (DWORD)strlen(http_corpo) : 0, 0) && WinHttpReceiveResponse(r, NULL)) {
+			DWORD st = 0, tam = sizeof st;
+			WinHttpQueryHeaders(r, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &st, &tam, WINHTTP_NO_HEADER_INDEX);
+			http_status = (int)st;
+			DWORD n = 0, lido = 0;
+			while (lido < sizeof http_resp - 1 && WinHttpReadData(r, http_resp + lido, (DWORD)(sizeof http_resp - 1 - lido), &n) && n) lido += n;
+			http_resp[lido] = 0;
+		}
+	}
+	if (r) WinHttpCloseHandle(r); if (c) WinHttpCloseHandle(c); if (s) WinHttpCloseHandle(s);
+	http_pronto = 1;
+	return 0;
+}
+static void http_pede(int tipo, const wchar_t *caminho, const char *corpo)
+{
+	if (http_ocupado) return;
+	http_tipo = tipo; http_pronto = 0; http_ocupado = 1;
+	wcsncpy(http_caminho, caminho, 127); http_caminho[127] = 0;
+	snprintf(http_corpo, sizeof http_corpo, "%s", corpo ? corpo : "");
+	SDL_DetachThread(SDL_CreateThread(http_thread, "sala", NULL));
+}
+static int json_texto(const char *json, const char *chave, char *out, int cap)   // "chave":"valor" (só o que o site manda)
+{
+	char k[64]; snprintf(k, sizeof k, "\"%s\":\"", chave);
+	const char *p = strstr(json, k);
+	if (!p) return 0;
+	p += strlen(k);
+	int i = 0;
+	while (*p && *p != '"' && i < cap - 1) out[i++] = *p++;
+	out[i] = 0;
+	return i > 0;
+}
+static int codigo_curto_ok(const char *s)
+{
+	if (strlen(s) != 6) return 0;
+	for (int i = 0; i < 3; i++) if (!isdigit((unsigned char)s[i])) return 0;
+	for (int i = 3; i < 6; i++) if (!isalpha((unsigned char)s[i])) return 0;
+	return 1;
+}
+static void http_resultado(void)
+{
+	http_ocupado = 0;
+	char v[64];
+	switch (http_tipo) {
+	case HTTP_CRIAR:
+		if (http_status == 200 && json_texto(http_resp, "codigo", v, sizeof v)) { snprintf(codigo_sala, sizeof codigo_sala, "%s", v); snprintf(rede_codigo, sizeof rede_codigo, "%s", v); t_consulta = SDL_GetTicks(); }
+		else { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, http_status ? "O site não deu um código (erro %d). Tente de novo." : "Sem resposta do achadoia.com (sem internet?)", http_status); }
+		break;
+	case HTTP_CONSULTAR:
+		if (http_status == 404) { if (!rede_anfitriao) { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "Sala %s não existe (ou expirou). Confira o código.", codigo_sala); } break; }
+		if (http_status != 200) { if (!rede_anfitriao && ++consultas >= 3) { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "Sem resposta do achadoia.com (sem internet?)"); } break; }
+		if (rede_anfitriao) {
+			if (!convidado_ok && json_texto(http_resp, "convidado", v, sizeof v) && endereco_para_candidatos(v)) { convidado_ok = 1; manda_ola(); }
+		} else if (!ncand && json_texto(http_resp, "anfitriao", v, sizeof v) && endereco_para_candidatos(v)) manda_ola();
+		break;
+	case HTTP_REGISTRAR:
+		if (http_status == 200) registrado = 1;
+		else if (http_status == 404) { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "Sala %s não existe (ou expirou). Confira o código.", codigo_sala); }
+		break;
+	}
+}
+static void sala_poll(void)
+{
+	if (http_ocupado) { if (http_pronto) http_resultado(); return; }
+	if (rede_estado != REDE_CRIANDO && rede_estado != REDE_ENTRANDO && rede_estado != REDE_PAREANDO) return;
+	u32 ag = SDL_GetTicks();
+	char corpo[128];
+	if (rede_anfitriao) {
+		if (stun_fase == 2 && !pedido_codigo) { pedido_codigo = 1; snprintf(corpo, sizeof corpo, "{\"papel\":\"anfitriao\",\"endereco\":\"%s\"}", meu_endereco); http_pede(HTTP_CRIAR, SALA_PATH, corpo); return; }
+		if (codigo_sala[0] && !convidado_ok && ag - t_consulta >= 2000) { t_consulta = ag; wchar_t cam[128]; swprintf(cam, 128, L"%ls?codigo=%hs", SALA_PATH, codigo_sala); http_pede(HTTP_CONSULTAR, cam, NULL); }
+	} else if (codigo_sala[0]) {
+		if (!ncand && ag - t_consulta >= 1500) { t_consulta = ag; wchar_t cam[128]; swprintf(cam, 128, L"%ls?codigo=%hs", SALA_PATH, codigo_sala); http_pede(HTTP_CONSULTAR, cam, NULL); return; }
+		if (stun_fase == 2 && !registrado && ncand) { snprintf(corpo, sizeof corpo, "{\"papel\":\"convidado\",\"codigo\":\"%s\",\"endereco\":\"%s\"}", codigo_sala, meu_endereco); http_pede(HTTP_REGISTRAR, SALA_PATH, corpo); }
+	}
 }
 
 static u32 descobre_lan(void)
@@ -213,7 +329,7 @@ static void stun_recebe(const u8 *b, int n)
 			u16 porta; u32 ip; memcpy(&porta, b + p + 6, 2); memcpy(&ip, b + p + 8, 4);
 			if (tipo == 0x0020) { porta ^= htons(0x2112); ip ^= htonl(0x2112A442u); }
 			pub_porta = porta; pub_ip = ip; stun_fase = 2;
-			monta_codigo();
+			monta_endereco();
 			return;
 		}
 		p += 4 + ((al + 3) & ~3);
@@ -255,7 +371,7 @@ static void comeca_partida(void)
 	memset(rem_q, 0xff, sizeof rem_q);
 	for (int i = 0; i < rede_atraso; i++) { loc_p[i] = 0xff; loc_x[i] = 0; }
 	loc_prox = (u32)rede_atraso;
-	memset(meu_crc_q, 0xff, sizeof meu_crc_q); crc_envia_q = 0xffffffffu;
+	memset(meu_crc_q, 0xff, sizeof meu_crc_q); crc_envia_q = 0xffffffffu; crc_comparado = 0xffffffffu; crc_ruins = 0;
 	snprintf(rede_msg, sizeof rede_msg, "Conectado! ping %d ms, atraso %d quadros", rede_ping, rede_atraso);
 	extern void frontend_online_comeca(void);
 	frontend_online_comeca();
@@ -312,7 +428,10 @@ static void recebe(const u8 *b, int n, const struct sockaddr_in *de)
 		const u8 *q = b + 8 + cnt * 2;
 		le32(q, &v); if (v > par_ack) par_ack = v;
 		u32 cq, cc; le32(q + 4, &cq); le32(q + 8, &cc);
-		if (cq != 0xffffffffu) for (int i = 0; i < 16; i++) if (meu_crc_q[i] == cq && meu_crc[i] != cc) rede_dessincronizou = 1;
+		if (cq != 0xffffffffu) for (int i = 0; i < 16; i++) if (meu_crc_q[i] == cq && cq != crc_comparado) {   // só avisa com 2 divergências seguidas (o aperto de mão do som faz a RAM diferir por um instante)
+			crc_comparado = cq;
+			if (meu_crc[i] != cc) { if (++crc_ruins >= 2) rede_dessincronizou = 1; } else crc_ruins = 0;
+		}
 		break; }
 	case T_TCHAU:
 		if (rede_estado == REDE_DESLIGADA) return;
@@ -346,6 +465,7 @@ static void zera(void)
 {
 	par_ok = vi_par = par_me_ve = 0; ncand = 0; rede_ativa = 0; rede_dessincronizou = 0; pongs = 0; ping_n = 0; rede_ping = 0;
 	rede_codigo[0] = 0; rede_msg[0] = 0; stun_fase = 0; stun_tentativas = 0; rede_escolha_pendente = -1;
+	codigo_sala[0] = 0; meu_endereco[0] = 0; registrado = convidado_ok = pedido_codigo = consultas = 0; t_consulta = 0;
 	lan_ip = descobre_lan(); rom_hash = hash_rom(); nonce = (u32)SDL_GetTicks() * 2654435761u + (u32)rand();
 	t_ultimo_rx = t_ola = SDL_GetTicks();
 }
@@ -366,29 +486,26 @@ int rede_entrar(const char *codigo)
 	zera();
 	if (!abre_porta()) { rede_estado = REDE_ERRO; return 0; }
 	rede_anfitriao = 0;
-	u8 b[10]; char ip[64];
-	if (decodifica(codigo, b, 10)) {
-		struct sockaddr_in a = {0}; a.sin_family = AF_INET;
-		memcpy(&a.sin_addr.s_addr, b, 4); memcpy(&a.sin_port, b + 4, 2); cand[ncand++] = a;
-		memcpy(&a.sin_addr.s_addr, b + 6, 4); if (a.sin_addr.s_addr && a.sin_addr.s_addr != cand[0].sin_addr.s_addr) cand[ncand++] = a;
+	char ip[64], cod[8];
+	if (strlen(codigo) == 6) { for (int i = 0; i < 7; i++) cod[i] = (char)toupper((unsigned char)codigo[i]); }
+	else cod[0] = 0;
+	if (codigo_curto_ok(cod)) {                   // código da sala: o site diz o endereço do anfitrião
+		snprintf(codigo_sala, sizeof codigo_sala, "%s", cod);
+	} else if ((strlen(codigo) == 16 || strlen(codigo) == 20) && endereco_para_candidatos(codigo)) {   // endereço cru (16/20 letras)
 	} else if (sscanf(codigo, "%63[0-9.]", ip) == 1 && strchr(ip, '.')) {   // "ip" ou "ip:porta" (Radmin/ZeroTier/LAN)
 		struct sockaddr_in a = {0}; a.sin_family = AF_INET; a.sin_addr.s_addr = inet_addr(ip);
 		const char *dp = strchr(codigo, ':'); a.sin_port = htons((u16)(dp ? atoi(dp + 1) : PORTA_BASE));
 		if (a.sin_addr.s_addr == INADDR_NONE) { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "Código inválido"); return 0; }
 		cand[ncand++] = a;
-	} else { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "Código inválido (16 letras ou ip:porta)"); return 0; }
+	} else { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "Código inválido (3 números + 3 letras, ou ip:porta)"); return 0; }
 	rede_estado = REDE_ENTRANDO;
-	stun_envia();          // meu código de resposta (pro anfitrião digitar se o furo não sair)
-	manda_ola();
+	stun_envia();          // meu endereço vai pro cadastro: o anfitrião também manda OLA pra mim
+	if (ncand) manda_ola();
 	return 1;
 }
-int rede_anfitriao_digita(const char *codigo)   // anfitrião digitou o código do convidado: fura dos dois lados
+int rede_anfitriao_digita(const char *endereco)   // (compatibilidade) anfitrião digitou o endereço de 16 letras do convidado
 {
-	u8 b[10];
-	if (!decodifica(codigo, b, 10)) return 0;
-	struct sockaddr_in a = {0}; a.sin_family = AF_INET; ncand = 0;
-	memcpy(&a.sin_addr.s_addr, b, 4); memcpy(&a.sin_port, b + 4, 2); cand[ncand++] = a;
-	memcpy(&a.sin_addr.s_addr, b + 6, 4); if (a.sin_addr.s_addr) cand[ncand++] = a;
+	if (!endereco_para_candidatos(endereco)) return 0;
 	manda_ola();
 	return 1;
 }
@@ -411,16 +528,17 @@ void rede_poll(void)
 		recebe(b, n, &de);
 	}
 	u32 ag = SDL_GetTicks();
-	if (stun_fase == 1 && ag - t_stun > 800) { if (stun_tentativas >= 6) stun_fase = -1; else stun_envia(); }
+	if (stun_fase == 1 && ag - t_stun > 800) { if (stun_tentativas >= 6) { stun_fase = -1; if (rede_estado == REDE_CRIANDO || rede_estado == REDE_ENTRANDO) { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "Não descobri seu endereço na internet (STUN sem resposta)"); } } else stun_envia(); }
+	sala_poll();
 	if (rede_estado == REDE_ERRO || rede_estado == REDE_DESLIGADA) return;
 	if (!rede_ativa) {
-		if (ag - t_ola >= OPEN_T) { t_ola = ag; manda_ola(); if (vi_par) manda_ping(); }
+		if (ag - t_ola >= OPEN_T && (ncand || par_ok)) { t_ola = ag; manda_ola(); if (vi_par) manda_ping(); }
 		if (rede_estado == REDE_PAREANDO && rede_anfitriao && par_me_ve && (pongs >= 4 || ag - t_pareou > 2500) && ag - t_inicio_envio >= 250) {
 			if (rede_atraso_cfg > 0) rede_atraso = rede_atraso_cfg;
 			else { rede_atraso = (rede_ping / 2 + 16) / 17 + 1; if (rede_atraso < 2) rede_atraso = 2; if (rede_atraso > 10) rede_atraso = 10; }
 			manda_inicio(); t_inicio_envio = ag;
 		}
-		if (rede_estado == REDE_ENTRANDO && ag - t_ultimo_rx > 25000) { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "Não achei o anfitrião (confira o código / tente o código de resposta)"); }
+		if (rede_estado == REDE_ENTRANDO && ag - t_ultimo_rx > 40000) { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "Não consegui chegar no anfitrião (roteador bloqueando). Plano B: Radmin VPN e ip:porta."); }
 	} else {
 		if (ag - t_ping >= 1000) { t_ping = ag; manda_ping(); }
 		if (ag - t_envio >= 30) manda_entradas();
@@ -433,11 +551,13 @@ const char *rede_status(void)
 	static char s[160];
 	switch (rede_estado) {
 	case REDE_CRIANDO:
-		if (stun_fase == 1) return "Descobrindo o endereço público...";
-		if (stun_fase == -1) return "Sem resposta do STUN (sem internet?). Dá pra usar só por IP (Radmin/ZeroTier/LAN).";
-		snprintf(s, sizeof s, "Esperando o convidado...  (porta %d, UPnP: %s)", porta_local, rede_upnp == 1 ? "porta aberta" : rede_upnp == 0 ? "tentando" : "não abriu");
+		if (stun_fase != 2) return "Descobrindo o endereço público...";
+		if (!codigo_sala[0]) return "Pedindo o código da sala ao achadoia.com...";
+		snprintf(s, sizeof s, "Esperando o convidado%s...  (porta %d, UPnP: %s)", convidado_ok ? " responder" : " entrar com o código", porta_local, rede_upnp == 1 ? "porta aberta" : rede_upnp == 0 ? "tentando" : "não abriu");
 		return s;
-	case REDE_ENTRANDO: return "Procurando o anfitrião...";
+	case REDE_ENTRANDO:
+		if (codigo_sala[0] && !ncand) return "Consultando a sala no achadoia.com...";
+		return registrado || !codigo_sala[0] ? "Procurando o anfitrião..." : "Achei a sala; avisando o anfitrião...";
 	case REDE_PAREANDO: snprintf(s, sizeof s, "Achei! Medindo o ping (%d ms)...", rede_ping); return s;
 	case REDE_LIGADA: return rede_msg;
 	case REDE_ERRO: return rede_msg;
@@ -469,4 +589,7 @@ void rede_depois_quadro(void)
 	for (u32 a = 0x100000; a < 0x110000; a += 2) { h ^= m68k_read_memory_16(a); h *= 16777619u; }
 	int i = (int)((quadro / 120) % 16);
 	meu_crc_q[i] = quadro; meu_crc[i] = h; crc_envia_q = quadro; crc_envia = h;
+#ifdef KOF_TESTE
+	if (getenv("KOF_DEBUG_REDE")) fprintf(stderr, "crc q=%u %08x par=%s:%d\n", quadro, h, inet_ntoa(par.sin_addr), ntohs(par.sin_port));
+#endif
 }

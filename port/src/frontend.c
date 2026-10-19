@@ -9,6 +9,8 @@
 #include "config.h"
 #include "musica.h"
 #include "rede.h"
+#include "atualiza.h"
+#include "versao.h"
 extern char font8x8_basic[128][8];   // definida em ui.c (font8x8_basic.h)
 extern char font8x8_ext_latin[96][8];
 #include <stdio.h>
@@ -146,7 +148,8 @@ static void compoe_rede(void)
 	if (tela_rede == 1) {
 		texto(150, 170, "JOGO ONLINE", LAR, 5);
 		texto(150, 230, "Direto entre os dois PCs, sem servidor. Um cria a sala e manda o código", CZ, 2);
-		texto(150, 254, "pro outro (WhatsApp); o outro entra com o código. Anfitrião = 1P.", CZ, 2);
+		texto(150, 254, "pro outro (WhatsApp); o outro entra com o código. Quem cria joga de 1P, quem entra de 2P.", CZ, 2);
+		texto(150, 290, "Cada um usa o controle configurado como JOGADOR 1 no seu F1 — o jogo troca por baixo.", VD, 2);
 		for (int i = 0; i < 3; i++) {
 			int y = 340 + i * 90, e = i == sub_sel;
 			if (e) faixa(110, 900, y, 56, 0xffff4b14, 245, 30);
@@ -159,37 +162,64 @@ static void compoe_rede(void)
 		texto(150, 150, "SALA CRIADA", LAR, 5);
 		if (rede_codigo[0]) {
 			texto(150, 230, "CÓDIGO DA SALA (manda pro seu amigo):", CZ, 2);
-			texto(150, 270, rede_codigo, BR, 7);
-			if (SDL_GetTicks() - t_copiado < 4000) texto(150, 340, "copiado pra área de transferência", VD, 2);
+			texto(150, 270, rede_codigo, BR, 12);
+			if (SDL_GetTicks() - t_copiado < 4000) texto(150, 390, "copiado pra área de transferência", VD, 2);
 		}
-		texto(150, 400, st, rede_estado == REDE_ERRO ? VM : CZ, 2);
-		if (rede_estado == REDE_CRIANDO || rede_estado == REDE_PAREANDO) {
-			texto(150, 480, "Não conectou em 20 s? Peça o CÓDIGO DE RESPOSTA que aparece na tela do", CZ, 2);
-			texto(150, 504, "convidado e digite aqui (fura o roteador dos dois lados):", CZ, 2);
-			char b[48]; snprintf(b, sizeof b, "%s%s", digitado, (pisca / 20) & 1 ? "_" : " ");
-			texto(150, 540, b, BR, 4);
-		}
+		texto(150, 440, st, rede_estado == REDE_ERRO ? VM : CZ, 2);
+		texto(150, 500, "A sala vale por 2 horas. O amigo escolhe ONLINE > ENTRAR COM CÓDIGO e digita.", CZ, 2);
 		texto(150, 660, "ESC cancela a sala", CZ, 2);
 	} else if (tela_rede == 3 || tela_rede == 4) {
 		texto(150, 150, "ENTRAR NA SALA", LAR, 5);
-		texto(150, 230, tela_rede == 3 ? "Digite o código que o anfitrião mandou (CTRL+V cola):" : "Código:", CZ, 2);
+		texto(150, 230, tela_rede == 3 ? "Digite o código da sala (3 números + 3 letras):" : "Código:", CZ, 2);
 		char b[48]; snprintf(b, sizeof b, "%s%s", digitado, tela_rede == 3 && (pisca / 20) & 1 ? "_" : "");
-		texto(150, 270, b, BR, 6);
-		if (tela_rede == 3) texto(150, 360, "ENTER conecta   ESC volta", CZ, 2);
+		texto(150, 270, b, BR, 10);
+		if (tela_rede == 3) texto(150, 400, "ENTER conecta   ESC volta   (ou ip:porta pra Radmin VPN / rede local)", CZ, 2);
 		else {
-			texto(150, 400, st, rede_estado == REDE_ERRO ? VM : CZ, 2);
-			if (rede_codigo[0] && rede_estado != REDE_ERRO) {
-				texto(150, 480, "Não conectou? Mande este CÓDIGO DE RESPOSTA pro anfitrião digitar:", CZ, 2);
-				texto(150, 520, rede_codigo, BR, 5);
-			}
+			texto(150, 440, st, rede_estado == REDE_ERRO ? VM : CZ, 2);
 			texto(150, 660, "ESC cancela", CZ, 2);
 		}
+	}
+}
+
+static int atualiza_na_tela(void)
+{
+	return !atualiza_adiada && (atualiza_estado == ATU_NOVA || atualiza_estado == ATU_BAIXANDO || atualiza_estado == ATU_PRONTA || (atualiza_estado == ATU_ERRO && atualiza_msg[0] && atualiza_versao[0]));
+}
+static void compoe_atualiza(void)
+{
+	u32 BR = 0xffffffffu, LAR = 0xffff5a1eu, CZ = 0xffb8b0a8u, VM = 0xffff6060u;
+	faixa(80, AW - 80, 470, 700, 0xff000000, 225, 225);
+	char b[200];
+	snprintf(b, sizeof b, "NOVA VERSÃO %s", atualiza_versao);
+	texto(150, 200, b, LAR, 5);
+	snprintf(b, sizeof b, "Você está na %s.", KOF_VERSAO);
+	texto(150, 260, b, CZ, 2);
+	if (atualiza_estado == ATU_NOVA) {
+		texto(150, 340, "ENTER / A  atualiza agora", BR, 4);
+		texto(150, 385, "(baixa, troca o EXE e reabre o jogo sozinho)", CZ, 2);
+		texto(150, 430, "ESC  deixa pra depois", CZ, 4);
+		texto(150, 500, "Pra jogar ONLINE os dois precisam estar na mesma versão.", CZ, 2);
+	} else if (atualiza_estado == ATU_BAIXANDO) {
+		unsigned t = atualiza_total, n = atualiza_bytes;
+		snprintf(b, sizeof b, "Baixando...  %.1f MB%s", n / 1048576.0, t ? "" : "");
+		if (t) snprintf(b + strlen(b), sizeof b - strlen(b), " de %.1f MB", t / 1048576.0);
+		texto(150, 340, b, BR, 3);
+		int larg = 1300, feito = t ? (int)((long long)larg * n / t) : 0;
+		faixa(150, 150 + larg, 420, 30, 0xff333333, 255, 255);
+		if (feito > 0) faixa(150, 150 + feito, 420, 30, 0xffff4b14, 255, 255);
+	} else if (atualiza_estado == ATU_PRONTA) {
+		texto(150, 340, "Pronto! Reiniciando com a versão nova...", BR, 3);
+	} else {
+		texto(150, 340, "Não deu pra atualizar:", VM, 3);
+		texto(150, 390, atualiza_msg, VM, 2);
+		texto(150, 460, "ESC continua na versão atual. Baixe à mão em github.com/achadoia/kof98-comunidade-edition", CZ, 2);
 	}
 }
 
 static void compoe(void)
 {
 	memcpy(tela, fundo, AW * AH * 4);
+	if (atualiza_na_tela()) { compoe_atualiza(); return; }
 	if (tela_rede) { compoe_rede(); return; }
 	for (int l = 1; l < 5; l++) {                     // linhas com 2 opções: faixa escura + traço laranja
 		faixa(120, 850, LINHA_Y[l], 56, 0xff07080a, 200, 120);
@@ -281,6 +311,12 @@ void frontend_controles(int *rodando)
 	};
 	int novo[8];
 	for (int i = 0; i < 8; i++) { novo[i] = agora[i] && !antes[i]; antes[i] = agora[i]; }
+	if (atualiza_na_tela()) {                          // aviso de versão nova por cima de tudo
+		sujo = 1;
+		if (atualiza_estado == ATU_PRONTA) { if (atualiza_aplicar()) *rodando = 0; return; }   // reinicia sozinho
+		if (novo[4] && atualiza_estado == ATU_NOVA) { audio_comando(0x71); atualiza_baixar(); }
+		return;
+	}
 	if (tela_rede == 1) {
 		int s = sub_sel;
 		if (novo[0]) s = (s + 2) % 3;
@@ -289,7 +325,7 @@ void frontend_controles(int *rodando)
 		if (novo[4]) {
 			audio_comando(0x71);
 			if (sub_sel == 2) { tela_rede = 0; rede_desligar(); }
-			else if (sub_sel == 0) { digitado[0] = 0; tela_rede = 2; rede_criar(); SDL_StartTextInput(); }
+			else if (sub_sel == 0) { digitado[0] = 0; tela_rede = 2; rede_criar(); }
 			else { digitado[0] = 0; tela_rede = 3; SDL_StartTextInput(); }
 			sujo = 1;
 		}
@@ -318,7 +354,7 @@ static void digita(const char *p)
 }
 int frontend_evento(const SDL_Event *e)
 {
-	if (!frontend_ativo || !(tela_rede == 2 || tela_rede == 3)) return 0;
+	if (!frontend_ativo || tela_rede != 3) return 0;
 	int cab = 0;
 	if (e->type == SDL_TEXTINPUT) { digita(e->text.text); cab = 1; }
 	else if (e->type == SDL_KEYDOWN) {
@@ -326,8 +362,7 @@ int frontend_evento(const SDL_Event *e)
 		if (s == SDL_SCANCODE_BACKSPACE) { size_t n = strlen(digitado); if (n) digitado[n - 1] = 0; cab = 1; }
 		else if (s == SDL_SCANCODE_V && (e->key.keysym.mod & KMOD_CTRL)) { char *t = SDL_GetClipboardText(); if (t) { digita(t); SDL_free(t); } cab = 1; }
 		else if (s == SDL_SCANCODE_RETURN || s == SDL_SCANCODE_KP_ENTER) {
-			if (tela_rede == 3 && digitado[0]) { tela_rede = 4; rede_entrar(digitado); cab = 1; }
-			else if (tela_rede == 2 && digitado[0]) { if (!rede_anfitriao_digita(digitado)) snprintf(rede_msg, sizeof rede_msg, "Código de resposta inválido"); cab = 1; }
+			if (digitado[0]) { tela_rede = 4; rede_entrar(digitado); cab = 1; }
 		}
 	}
 	if (cab) sujo = 1;
@@ -338,6 +373,7 @@ int frontend_evento(const SDL_Event *e)
 int frontend_voltar(void)
 {
 	if (!frontend_ativo) return 0;
+	if (atualiza_na_tela()) { if (atualiza_estado != ATU_BAIXANDO && atualiza_estado != ATU_PRONTA) { atualiza_adiada = 1; sujo = 1; } return 1; }
 	if (rede_ativa) { rede_desligar(); sujo = 1; return 1; }
 	if (!tela_rede) return 0;
 	if (tela_rede == 1) tela_rede = 0; else { rede_desligar(); tela_rede = 1; }
@@ -433,7 +469,7 @@ void frontend_desenha(SDL_Renderer *ren)
 	if (!tex) tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, AW, AH);
 	if (tela_rede == 2 && rede_codigo[0] && !t_copiado) { SDL_SetClipboardText(rede_codigo); t_copiado = SDL_GetTicks(); sujo = 1; }
 	if (tela_rede != 2) t_copiado = 0;
-	if (sujo || pisca % 20 == 0 || piloto == 2 || tela_rede) { compoe(); SDL_UpdateTexture(tex, NULL, tela, AW * 4); sujo = 0; }
+	if (sujo || pisca % 20 == 0 || piloto == 2 || tela_rede || atualiza_na_tela()) { compoe(); SDL_UpdateTexture(tex, NULL, tela, AW * 4); sujo = 0; }
 	int ow, oh;
 	SDL_GetRendererOutputSize(ren, &ow, &oh);
 	SDL_Rect r = {0, 0, ow, ow * AH / AW};

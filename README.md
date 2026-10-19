@@ -69,17 +69,24 @@ Quer entrar no jogo também, ou tem ideia de personagem, golpe ou modo? Chama no
   o botão desenhado ao lado de cada retrato (**A** vermelho em cima, **B** amarelo no meio, **C** verde embaixo) escolhe quem começa, em segredo. As colunas ficam congeladas até os dois
   terminarem, então ninguém sabe a ordem do outro.
 
-### Jogo online, sem servidor (v1.5.0)
-- **ONLINE** no menu: um jogador escolhe **CRIAR SALA** e recebe um código de 16 letras (já copiado pra área de
-  transferência); manda pelo WhatsApp. O outro escolhe **ENTRAR COM CÓDIGO**, cola (CTRL+V) e Enter. Os dois PCs
-  se conectam direto, sem servidor nem cadastro: a sala é só o código. Quem cria é o 1P.
+### Jogo online (v1.5.0, código curto na v1.6.0)
+- **ONLINE** no menu: um jogador escolhe **CRIAR SALA** e recebe um código de **3 números + 3 letras** (ex.: `504XBP`,
+  já copiado pra área de transferência); manda pelo WhatsApp. O outro escolhe **ENTRAR COM CÓDIGO**, digita e Enter.
+  A luta roda direto entre os dois PCs (o achadoia.com só guarda o endereço por trás do código, por 2 horas).
+  Quem cria joga de 1P, quem entra de 2P.
+- **Controle**: cada um usa o controle que configurou como Jogador 1 no seu F1. O jogo troca os lados por baixo.
 - Netcode por atraso fixo (lockstep): o atraso é calculado pelo ping (ou fixo em F1 → Melhorias) e os dois jogos
   rodam quadro a quadro iguais; no canto da tela aparece ping e atraso, e um aviso se o estado divergir.
 - Depois da luta o menu volta nos dois; o anfitrião escolhe 2P VS de novo (ou EXIT pra encerrar a sala).
-- Roteador que não deixa entrar? O convidado vê um **código de resposta** pra mandar de volta, e o anfitrião digita
-  na tela da sala: os dois furam o NAT ao mesmo tempo. O anfitrião também tenta abrir a porta por UPnP sozinho.
-  Última saída: Radmin VPN / ZeroTier e digitar `ip:porta` no lugar do código (porta 7998).
+- Roteador chato? Os dois lados furam o NAT ao mesmo tempo (o site passa o endereço do convidado pro anfitrião) e o
+  anfitrião ainda tenta abrir a porta por UPnP. Última saída: Radmin VPN / ZeroTier e digitar `ip:porta` no lugar
+  do código (porta 7998).
 - **Filtro xBR** (padrão): bordas em curva, no estilo dos shaders xBR dos emuladores. F4 troca na hora.
+
+### Atualização automática (v1.6.0)
+- Ao abrir, o jogo confere se tem versão nova aqui no GitHub. Se tiver, pergunta na hora: **ENTER** baixa o EXE
+  novo, troca o arquivo e reabre o jogo sozinho; **ESC** deixa pra depois. Pra jogar online os dois precisam estar
+  na mesma versão.
 
 ### Por vir
 - Modo COOP.

@@ -19,6 +19,8 @@
 #include "frontend.h"
 #include "ordem.h"
 #include "rede.h"
+#include "atualiza.h"
+#include "versao.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -503,7 +505,7 @@ int main(int argc, char **argv)
 	if (getenv("KOF_RUNAHEAD")) cfg.run_ahead = atoi(getenv("KOF_RUNAHEAD"));
 	if (getenv("KOF_RITMO")) cfg.ritmo_monitor = atoi(getenv("KOF_RITMO"));
 #endif
-	SDL_Window *win = SDL_CreateWindow("KOF98 Anniversary - port nativo (kof98-recomp)", SDL_WINDOWPOS_CENTERED,
+	SDL_Window *win = SDL_CreateWindow("KOF '98 UM Comunidade Edition v" KOF_VERSAO, SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED, NEO_H * escala * 4 / 3, NEO_H * escala, SDL_WINDOW_RESIZABLE | (autofoto && !getenv("KOF_JANELA") ? SDL_WINDOW_HIDDEN : 0));
 	SDL_SetWindowSize(win, NEO_H * escala * 4 / 3, NEO_H * escala);
 #ifdef KOF_SOLO
@@ -545,6 +547,11 @@ int main(int argc, char **argv)
 	{
 		char *bp = SDL_GetBasePath();
 		if (frontend_carrega(bp) && !est_ini) frontend_abre();
+#ifdef KOF_SOLO
+		if (!autofoto || getenv("KOF_ATUALIZA")) atualiza_checa();   // versão nova no GitHub? (só no EXE distribuído)
+#else
+		if (getenv("KOF_ATUALIZA")) atualiza_checa();
+#endif
 		SDL_free(bp);
 	}
 #ifdef KOF_TESTE
