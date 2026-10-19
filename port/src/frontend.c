@@ -149,7 +149,7 @@ static void compoe_rede(void)
 		texto(150, 170, "JOGO ONLINE", LAR, 5);
 		texto(150, 230, "Direto entre os dois PCs, sem servidor. Um cria a sala e manda o código", CZ, 2);
 		texto(150, 254, "pro outro (WhatsApp); o outro entra com o código. Quem cria joga de 1P, quem entra de 2P.", CZ, 2);
-		texto(150, 290, "Cada um usa o controle configurado como JOGADOR 1 no seu F1 — o jogo troca por baixo.", VD, 2);
+		texto(150, 290, "Cada um usa o controle configurado como JOGADOR 1 no seu F1 - o jogo troca por baixo.", VD, 2);
 		for (int i = 0; i < 3; i++) {
 			int y = 340 + i * 90, e = i == sub_sel;
 			if (e) faixa(110, 900, y, 56, 0xffff4b14, 245, 30);
