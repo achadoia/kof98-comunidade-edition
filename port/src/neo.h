@@ -53,6 +53,7 @@ extern u8 neo_in_test;             // 0 = botão de teste apertado
 
 void neo_init(void);
 void neo_reset(void);
+void neo_zera_tudo(void);            // partida online: também o que o reset normal herda (backup RAM, ciclos de sobra, chip YM)
 void neo_frame(void);              // roda um quadro inteiro (264 linhas)
 extern int neo_linha;              // linha atual (vpos)
 extern u32 neo_quadros;
@@ -101,6 +102,7 @@ void neo_atualiza_irq(void);
 // ---------------------------------------------------------------- som (audio.cpp)
 void audio_init(int taxa_saida);
 void audio_reset(void);
+void audio_recria(void);             // YM2610 novo em folha (zera até os contadores internos)
 void audio_comando(u8 cmd);          // 68k escreve em 0x320000
 u8 audio_resposta(void);             // 68k lê o byte alto de 0x320000
 void audio_roda_linha(void);         // roda o Z80 + YM por uma linha

@@ -221,6 +221,28 @@ extern "C" void audio_comando(u8 cmd)
 }
 
 extern "C" u8 audio_resposta(void) { return latch_resp; }
+#ifdef KOF_TESTE
+extern "C" u32 audio_hash_debug(void)
+{
+	u32 h = 2166136261u;
+	for (int i = 0; i < 0x800; i++) { h ^= zram[i]; h *= 16777619u; }
+	u32 x[6] = {latch_cmd, latch_resp, (u32)cmd_pendente, (u32)nmi_ligado, (u32)cpu.pc, (u32)ciclos_sobra};
+	for (int i = 0; i < 6; i++) { h ^= x[i]; h *= 16777619u; }
+	if (getenv("KOF_DEBUG_ZH")) { u32 hz = 2166136261u; for (int i = 0; i < 0x800; i++) { hz ^= zram[i]; hz *= 16777619u; } fprintf(stderr, "zh %u zram %08x cmd %02x resp %02x pend %d nmi %d pc %04x sobra %ld\n", neo_quadros, hz, x[0], x[1], x[2], x[3], x[4], ciclos_sobra); }
+	return h;
+}
+extern "C" void audio_dump_debug(const char *nome)   // KOF_DEBUG_RAMDUMP: RAM + registradores do Z80, latches e estado do YM
+{
+	FILE *f = fopen(nome, "wb");
+	if (!f) return;
+	fwrite(zram, 1, sizeof zram, f);
+	u8 l[4] = {latch_cmd, latch_resp, (u8)cmd_pendente, (u8)nmi_ligado}; fwrite(l, 1, 4, f);
+	fwrite(&cpu.pc, sizeof cpu.pc, 1, f); fwrite(&cpu.sp, sizeof cpu.sp, 1, f); fwrite(&ciclos_sobra, sizeof ciclos_sobra, 1, f);
+	fwrite(&intf.timer, sizeof intf.timer, 1, f);
+	std::vector<uint8_t> v; ymfm::ymfm_saved_state st(v, true); ym->save_restore(st); fwrite(v.data(), 1, v.size(), f);
+	fclose(f);
+}
+#endif
 extern "C" void audio_bios_ou_cart(int cart) { usa_cart = cart; }
 
 extern "C" void audio_init(int taxa)
@@ -232,6 +254,16 @@ extern "C" void audio_init(int taxa)
 	const char *c = getenv("KOF_CORTE");
 	corte_hz = c ? atof(c) : 12000.0;
 	prepara_filtro((double)ym->sample_rate(YM_CLOCK), corte_hz);
+}
+
+extern "C" void audio_recria(void)
+{
+	delete ym;
+	ym = new ymfm::ym2610(intf);
+	ym->set_fidelity(ymfm::OPN_FIDELITY_MIN);
+	intf.timer[0] = intf.timer[1] = -1;
+	intf.irq = false;
+	audio_reset();
 }
 
 extern "C" void audio_reset(void)

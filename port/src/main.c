@@ -31,6 +31,7 @@
 
 char cfg_arquivo[512] = "kof98.ini";
 static u32 tela[NEO_H][NEO_W];
+static u32 status_rede[20][NEO_W]; static int status_rede_w, status_rede_w2;   // linha "online ping atraso rollback" em 2 metades (0 = não mostra)
 static u32 tela_ui[NEO_H][NEO_W];   // interface do EXE (treino, F1, tela de ordem): camada transparente desenhada por cima das fotos
 
 // ---------------------------------------------------------------- roteiro de entradas (modo de teste)
@@ -318,6 +319,17 @@ static void apresenta(void)
 	SDL_RenderCopy(ren, tj, NULL, &r);
 	if (cfg.fotos && nfotos && !cfgmenu_aberto) fotos_desenha(&r, ordem_mostra_congelado() ? ordem_ovl : video_ovl);
 	if (tex_ui) { SDL_UpdateTexture(tex_ui, NULL, tela_ui, NEO_W * 4); SDL_RenderCopy(ren, tex_ui, NULL, &r); }
+	if (rede_ativa && status_rede_w > 1) {   // status do online: canto superior direito, metade do tamanho da fonte do jogo
+		static SDL_Texture *tex_st;
+		if (!tex_st) { tex_st = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, NEO_W, 20); SDL_SetTextureBlendMode(tex_st, SDL_BLENDMODE_BLEND); SDL_SetTextureScaleMode(tex_st, SDL_ScaleModeLinear); }
+		SDL_UpdateTexture(tex_st, NULL, status_rede, NEO_W * 4);
+		double s = r.h / (double)NEO_H * 0.5;
+		int x2 = r.x + r.w - (int)(4 * s) - (int)(status_rede_w2 * s), x1 = x2 - (int)(status_rede_w * s), y = r.y + (int)(4 * s);
+		SDL_Rect src1 = {0, 0, status_rede_w, 10}, dst1 = {x1, y, x2 - x1, (int)(10 * s)};
+		SDL_Rect src2 = {0, 10, status_rede_w2, 10}, dst2 = {x2, y, (int)(status_rede_w2 * s), (int)(10 * s)};
+		SDL_RenderCopy(ren, tex_st, &src1, &dst1);
+		SDL_RenderCopy(ren, tex_st, &src2, &dst2);
+	}
 	prepara_linhas(f->linhas);
 	if (tex_linhas) SDL_RenderCopy(ren, tex_linhas, NULL, &r);
 	prepara_mascara(r.w, r.h, f->mascara);
@@ -474,12 +486,13 @@ int main(int argc, char **argv)
 #ifdef KOF_TESTE
 			if (getenv("KOF_TESTE_ROLLBACK")) {   // determinismo do savestate: salva, roda, volta 8 quadros, re-simula e compara o hash
 				extern int estado_ring_carregar(u32); extern void estado_ring_salvar(u32);
-				static u8 rp1[64], rp2[64], rs[64]; static u32 rh[64]; static int erros;
+				static u8 rp1[64], rp2[64], rs[64]; static u32 rh[64], rz[64]; static int erros; extern u32 audio_hash_debug(void);
 				u32 qa = neo_quadros;
 				estado_leve = 1; estado_ring_salvar(qa); estado_leve = 0;
+				if (getenv("KOF_TESTE_ALEATORIO") && qa % 4 == 0) { neo_in_p1 = (u8)rand(); neo_in_p2 = (u8)rand(); }   // golpes aleatórios = muito som
 				rp1[qa % 64] = neo_in_p1; rp2[qa % 64] = neo_in_p2; rs[qa % 64] = neo_in_start;
 				neo_frame();
-				{ u32 h = 2166136261u; for (u32 a = 0x100000; a < 0x110000; a += 2) { h ^= (u32)m68k_read_memory_16(a); h *= 16777619u; } rh[(qa + 1) % 64] = h; }
+				{ u32 h = 2166136261u; for (u32 a = 0x100000; a < 0x110000; a += 2) { h ^= (u32)m68k_read_memory_16(a); h *= 16777619u; } rh[(qa + 1) % 64] = h; rz[(qa + 1) % 64] = audio_hash_debug(); }
 				if (qa > 200 && qa % 30 == 0) {
 					u32 q0 = qa - 8;
 					if (estado_ring_carregar(q0)) fprintf(stderr, "rollback-teste: sem estado %u\n", q0);
@@ -491,6 +504,7 @@ int main(int argc, char **argv)
 							neo_frame();
 							u32 h = 2166136261u; for (u32 a = 0x100000; a < 0x110000; a += 2) { h ^= (u32)m68k_read_memory_16(a); h *= 16777619u; }
 							if (h != rh[(q + 1) % 64]) { if (erros++ < 20) fprintf(stderr, "rollback-teste: quadro %u diverge (%08x x %08x) apos voltar pra %u\n", q + 1, h, rh[(q + 1) % 64], q0); break; }
+							if (audio_hash_debug() != rz[(q + 1) % 64]) { if (erros++ < 20) fprintf(stderr, "rollback-teste: Z80 do quadro %u diverge apos voltar pra %u\n", q + 1, q0); break; }
 						}
 						audio_descarta(); musica_silenciosa = 0; estado_leve = 0;
 						if (neo_quadros != qa + 1) fprintf(stderr, "rollback-teste: neo_quadros %u != %u\n", neo_quadros, qa + 1);
@@ -833,10 +847,17 @@ int main(int argc, char **argv)
 		ordem_desenha(tela, tela_ui);
 		treino_desenha(tela_ui);
 		if (rede_ativa) {
-			char b[48];
+			char b[64];
 			ui_alvo(tela_ui);
-			snprintf(b, sizeof b, "online %dP  ping %d ms  atraso %d  rollback %d", rede_anfitriao ? 1 : 2, rede_ping, rede_atraso, rede_rollbacks);
-			ui_texto(4, NEO_H - 12, b, 0xff60ff90u);
+			// camada própria: canto superior direito, metade do tamanho (apresenta()). A linha passa de 320 px:
+			// metade de cima e metade de baixo do buffer, coladas lado a lado na hora de desenhar
+			memset(status_rede, 0, sizeof status_rede);
+			ui_alvo(status_rede);
+			snprintf(b, sizeof b, "online %dP  ping %d ms  ", rede_anfitriao ? 1 : 2, rede_ping);
+			status_rede_w = ui_texto(1, 1, b, 0xff60ff90u);
+			snprintf(b, sizeof b, "atraso %d  rollback %d", rede_atraso, rede_rollbacks);
+			status_rede_w2 = ui_texto(0, 11, b, 0xff60ff90u) + 1;
+			ui_alvo(tela_ui);
 			if (rede_esperando() > 15) ui_texto_centro(NEO_H / 2 - 4, "Aguardando o adversário...", 0xffffe060u);
 			if (rede_dessincronizou) ui_texto_centro(NEO_H / 2 + 10, "DESSINCRONIZOU: ESC e crie a sala de novo", 0xffff6060u);
 			{   // chat: mensagens dos últimos 10 s no canto inferior esquerdo + campo de digitação (T)

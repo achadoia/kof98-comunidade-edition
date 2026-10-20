@@ -59,8 +59,11 @@ static Estado anel[RING_EST]; static u32 anel_q[RING_EST]; static int anel_ok[RI
 void estado_ring_salvar(u32 q)
 {
 	Estado *e = &anel[q % RING_EST];
+	int leve = estado_leve;
+	estado_leve = 1;                     // o anel é sempre leve (salvar e carregar precisam do mesmo formato)
 	e->pos = 0; e->salvar = 1; e->erro = 0;
 	tudo(e);
+	estado_leve = leve;
 	anel_q[q % RING_EST] = q; anel_ok[q % RING_EST] = 1;
 }
 int estado_ring_carregar(u32 q)
@@ -68,10 +71,13 @@ int estado_ring_carregar(u32 q)
 	int i = (int)(q % RING_EST);
 	if (!anel_ok[i] || anel_q[i] != q) return 1;
 	Estado *e = &anel[i];
+	int leve = estado_leve;
+	estado_leve = 1;                     // (bug até 20/10: carregava sem leve, o bloco da música não batia e musica_reset() zerava o prefixo de voz e a fila do Z80 = dessincronia)
 	size_t cap = e->cap, tam = e->pos;
 	e->cap = tam; e->pos = 0; e->salvar = 0; e->erro = 0;
 	tudo(e);
 	e->cap = cap;
+	estado_leve = leve;
 	return e->erro;
 }
 void estado_ring_limpa(void) { memset(anel_ok, 0, sizeof anel_ok); }

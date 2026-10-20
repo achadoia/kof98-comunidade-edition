@@ -19,7 +19,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#define VERSAO_REDE 3
+#define VERSAO_REDE 4
 #define PORTA_BASE 7998
 #define RING 512
 #define OPEN_T 200
@@ -411,6 +411,7 @@ static void comeca_partida(void)
 	estado_ring_limpa();
 	snprintf(rede_msg, sizeof rede_msg, "Conectado! ping %d ms, atraso %d quadros", rede_ping, rede_atraso);
 	extern void frontend_online_comeca(void);
+	neo_zera_tudo();   // mesmo estado de máquina nos dois lados (inclui neo_quadros = 0: a fase do pulso de 1 Hz do relógio tem que bater)
 	frontend_online_comeca();
 	neo_quadros = 0;   // o pulso de 1 Hz do relógio (rtc_tp) sai de neo_quadros: os dois lados precisam da mesma fase, senão a BIOS conta os segundos em quadros diferentes e a RAM diverge de vez em quando (falso DESSINCRONIZOU)
 }
@@ -673,8 +674,19 @@ void rede_hash_depois(u32 qn)
 		static int ini = -2, fim; if (ini == -2) { ini = -1; const char *e = getenv("KOF_DEBUG_QUADROS"); if (e) sscanf(e, "%d,%d", &ini, &fim); }
 		if (rede_ativa && ini >= 0 && (int)qn >= ini && (int)qn <= fim) {
 			extern unsigned int m68k_read_memory_16(unsigned int); u32 h = 2166136261u;
-			for (u32 a = 0x100000; a < 0x110000; a += 2) { h ^= m68k_read_memory_16(a); h *= 16777619u; }
-			u32 q = qn - 1; fprintf(stderr, "Q %u %08x loc %02x rem %02x/%02x real %d\n", qn, h, loc_p[q % RING], usado_p[q % RING], usado_x[q % RING], q < rem_tem_ate);
+			for (u32 a = 0x100000; a < 0x10F000; a += 2) { h ^= m68k_read_memory_16(a); h *= 16777619u; }
+			u32 audio_hash_debug(void);
+			u32 q = qn - 1; fprintf(stderr, "Q %u %08x z %08x loc %02x rem %02x/%02x real %d\n", qn, h, audio_hash_debug(), loc_p[q % RING], usado_p[q % RING], usado_x[q % RING], q < rem_tem_ate);
+		}
+	}
+#endif
+#ifdef KOF_TESTE
+	{   // KOF_DEBUG_RAMDUMP_DE=ini,fim: despeja a RAM de todo quadro nesse intervalo (prefixo de KOF_DEBUG_RAMDUMP)
+		static int di = -2, df; if (di == -2) { di = -1; const char *e = getenv("KOF_DEBUG_RAMDUMP_DE"); if (e) sscanf(e, "%d,%d", &di, &df); }
+		if (rede_ativa && di >= 0 && (int)qn >= di && (int)qn <= df && qn % 120 != 0 && getenv("KOF_DEBUG_RAMDUMP")) {
+			char nome[300]; snprintf(nome, sizeof nome, "%s_%u.bin", getenv("KOF_DEBUG_RAMDUMP"), qn);
+			FILE *f = fopen(nome, "wb");
+			if (f) { for (u32 a = 0x100000; a < 0x110000; a += 2) { u16 w = (u16)m68k_read_memory_16(a); fputc(w >> 8, f); fputc(w & 255, f); } fclose(f); }
 		}
 	}
 #endif
@@ -685,6 +697,7 @@ void rede_hash_depois(u32 qn)
 		char nome[300]; snprintf(nome, sizeof nome, "%s_%u.bin", getenv("KOF_DEBUG_RAMDUMP"), qn);
 		FILE *f = fopen(nome, "wb");
 		if (f) { for (u32 a = 0x100000; a < 0x110000; a += 2) { u16 w = (u16)m68k_read_memory_16(a); fputc(w >> 8, f); fputc(w & 255, f); } fclose(f); }
+		{ void audio_dump_debug(const char *); snprintf(nome, sizeof nome, "%s_%u.z80", getenv("KOF_DEBUG_RAMDUMP"), qn); audio_dump_debug(nome); }
 	}
 #endif
 	u32 h = 2166136261u;

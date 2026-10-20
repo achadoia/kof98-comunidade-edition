@@ -272,8 +272,21 @@ void neo_reset(void)
 	neo_linha = 0;
 }
 
+// partida online: os dois lados precisam partir do MESMO estado de máquina, bit a bit. O neo_reset() deixa
+// passar o que vem de antes (cada janela ficou um tempo diferente no menu): ciclos de sobra do 68k, backup RAM,
+// relógio e os contadores internos do YM2610 (envelope/LFO, que o ym->reset() não zera).
+static s32 sobra;
+void neo_zera_tudo(void)
+{
+	memset(sram, 0, sizeof sram);
+	sobra = 0; watchdog = 0;
+	rtc_tp = rtc_dado = rtc_clk = rtc_stb = 0; rtc_cmd = 0; rtc_bit = 0;
+	audio_recria();
+	neo_reset();
+	neo_quadros = 0;
+}
+
 // ---------------------------------------------------------------- agendador
-static s32 sobra;                 // ciclos 68k a mais executados na fatia anterior
 
 static void roda_68k(s32 ciclos)
 {
