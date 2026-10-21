@@ -11,6 +11,8 @@
 // aceita a resposta. Quando o roteador do anfitrião não aceita (NAT simétrico), o anfitrião pode digitar o código
 // do convidado e os dois furam ao mesmo tempo. UPnP tenta abrir a porta do anfitrião numa thread.
 #include "rede.h"
+#include "atualiza.h"
+#include "versao.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <SDL.h>
@@ -368,10 +370,11 @@ static void stun_recebe(const u8 *b, int n)
 // ---------------------------------------------------------------- pacotes
 static void manda_ola(void)
 {
-	u8 b[16] = {'K', 'N', T_OLA};
+	u8 b[32] = {'K', 'N', T_OLA};
 	es32(b + 3, VERSAO_REDE); es32(b + 7, rom_hash); b[11] = (u8)rede_anfitriao; b[12] = (u8)vi_par;
-	if (par_ok) envia(b, 13);
-	for (int i = 0; i < ncand; i++) if (!par_ok || !mesmo(&cand[i], &par)) envia_para(&cand[i], b, 13);
+	snprintf((char *)b + 13, 16, "%s", KOF_VERSAO);   // versão do EXE (1.8.2+): o outro lado mostra "você na X, ele na Y"; versões velhas ignoram o extra
+	if (par_ok) envia(b, 29);
+	for (int i = 0; i < ncand; i++) if (!par_ok || !mesmo(&cand[i], &par)) envia_para(&cand[i], b, 29);
 }
 static void manda_ping(void) { u8 b[8] = {'K', 'N', T_PING}; es32(b + 3, SDL_GetTicks()); envia(b, 7); }
 static void manda_inicio(void) { u8 b[12] = {'K', 'N', T_INICIO, (u8)rede_atraso, (u8)rede_ordem}; es32(b + 5, nonce); envia(b, 9); }
@@ -426,7 +429,18 @@ static void recebe(const u8 *b, int n, const struct sockaddr_in *de)
 	switch (b[2]) {
 	case T_OLA:
 		if (n < 13) return;
-		le32(b + 3, &v); if (v != VERSAO_REDE) { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "O outro lado usa outra versão do jogo"); return; }
+		le32(b + 3, &v);
+		if (v != VERSAO_REDE) {
+			char outra[16] = ""; if (n >= 29) { memcpy(outra, b + 13, 15); outra[15] = 0; }
+			rede_estado = REDE_ERRO;
+			if (outra[0]) snprintf(rede_msg, sizeof rede_msg, "Ele está na %s e você na %s: os dois precisam da mesma versão", outra, KOF_VERSAO);
+			else snprintf(rede_msg, sizeof rede_msg, "O outro lado usa uma versão antiga (anterior à 1.8.2): peça pra ele atualizar");
+			if (outra[0] && versao_numero(outra) > versao_numero(KOF_VERSAO)) {   // ele é mais novo: oferece a atualização de novo
+				atualiza_adiada = 0;
+				if (atualiza_estado == ATU_ATUAL || atualiza_estado == ATU_ERRO || atualiza_estado == ATU_NADA) { atualiza_estado = ATU_NADA; atualiza_checa(); }
+			}
+			return;
+		}
 		le32(b + 7, &v); if (v != rom_hash) { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, "ROM diferente do outro lado (kof98ae2016.zip)"); return; }
 		if (b[11] == (u8)rede_anfitriao) { rede_estado = REDE_ERRO; snprintf(rede_msg, sizeof rede_msg, rede_anfitriao ? "Os dois criaram sala: um deve ENTRAR" : "Os dois entraram: um deve CRIAR a sala"); return; }
 		vi_par = 1; if (b[12]) par_me_ve = 1;

@@ -658,11 +658,9 @@ int main(int argc, char **argv)
 		char *bp = SDL_GetBasePath();
 		hd_init(bp);
 		if (frontend_carrega(bp) && !est_ini) frontend_abre();
-#ifdef KOF_SOLO
-		if (!autofoto || getenv("KOF_ATUALIZA")) atualiza_checa();   // versão nova no GitHub? (só no EXE distribuído)
-#else
-		if (getenv("KOF_ATUALIZA")) atualiza_checa();
-#endif
+		// versão nova no GitHub? Em TODO EXE (antes era só no SOLO: o .rar saiu com um kof98.exe de dev 1.8.0 e o amigo
+		// ficou sem aviso, mas o online recusava por "outra versão"). KOF_SEM_ATUALIZA=1 desliga (testes/dev).
+		if ((!autofoto && !getenv("KOF_SEM_ATUALIZA")) || getenv("KOF_ATUALIZA")) atualiza_checa();
 		SDL_free(bp);
 	}
 #ifdef KOF_TESTE

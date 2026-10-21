@@ -16,7 +16,7 @@ unsigned atualiza_bytes, atualiza_total;
 static char url_exe[600];
 static char arq_novo[MAX_PATH];
 
-static int versao_num(const char *v)   // "1.6.0" -> 1*1000000 + 6*1000 + 0
+int versao_numero(const char *v)   // "1.6.0" -> 1*1000000 + 6*1000 + 0
 {
 	int a = 0, b = 0, c = 0;
 	if (*v == 'v' || *v == 'V') v++;
@@ -78,17 +78,46 @@ static int http_get(const wchar_t *host, const wchar_t *caminho, char *buf, int 
 	return ok;
 }
 
+// Reserva sem a API (ela limita 60 pedidos/hora por IP e muita operadora põe milhares de clientes no mesmo IP, CGNAT):
+// GET github.com/<repo>/releases/latest sem seguir o redirect → Location: .../releases/tag/vX.Y.Z
+static int latest_por_redirect(char *tag, int cap)
+{
+	int ok = 0;
+	HINTERNET s = WinHttpOpen(L"KOF98CE/" KOF_VERSAO, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+	HINTERNET c = s ? WinHttpConnect(s, L"github.com", INTERNET_DEFAULT_HTTPS_PORT, 0) : NULL;
+	HINTERNET r = c ? WinHttpOpenRequest(c, L"GET", L"/achadoia/kof98-comunidade-edition/releases/latest", NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE) : NULL;
+	if (r) {
+		DWORD to = 15000, sem = WINHTTP_DISABLE_REDIRECTS; WinHttpSetTimeouts(r, to, to, to, 30000);
+		WinHttpSetOption(r, WINHTTP_OPTION_DISABLE_FEATURE, &sem, sizeof sem);
+		if (WinHttpSendRequest(r, WINHTTP_NO_ADDITIONAL_HEADERS, 0, NULL, 0, 0, 0) && WinHttpReceiveResponse(r, NULL)) {
+			wchar_t loc[512]; DWORD tam = sizeof loc;
+			if (WinHttpQueryHeaders(r, WINHTTP_QUERY_LOCATION, WINHTTP_HEADER_NAME_BY_INDEX, loc, &tam, WINHTTP_NO_HEADER_INDEX)) {
+				const wchar_t *p = wcsstr(loc, L"/tag/");
+				if (p) { p += 5; int i = 0; while (*p && *p != L'?' && *p != L'/' && i < cap - 1) tag[i++] = (char)*p++; tag[i] = 0; ok = i > 0; }
+			}
+		}
+	}
+	if (r) WinHttpCloseHandle(r); if (c) WinHttpCloseHandle(c); if (s) WinHttpCloseHandle(s);
+	return ok;
+}
+
 static int checa_thread(void *arg)
 {
 	(void)arg;
 	static char json[65536];
-	if (!http_get(L"api.github.com", REPO_API, json, sizeof json, NULL)) { atualiza_estado = ATU_ERRO; return 0; }
-	char tag[32];
-	if (!json_texto(json, "tag_name", tag, sizeof tag, NULL) || !json_texto(json, "browser_download_url", url_exe, sizeof url_exe, ".exe")) { atualiza_estado = ATU_ERRO; snprintf(atualiza_msg, sizeof atualiza_msg, "Release sem EXE"); return 0; }
+	char tag[32] = "";
+	int api_ok = !getenv("KOF_ATUALIZA_SEM_API") && http_get(L"api.github.com", REPO_API, json, sizeof json, NULL)
+	             && json_texto(json, "tag_name", tag, sizeof tag, NULL) && json_texto(json, "browser_download_url", url_exe, sizeof url_exe, ".exe");
+	if (!api_ok) {
+		if (getenv("KOF_DEBUG_ATUALIZA")) fprintf(stderr, "atualiza: API falhou (%s), tentando pelo redirect da página de releases\n", atualiza_msg);
+		if (!latest_por_redirect(tag, sizeof tag)) { atualiza_estado = ATU_ERRO; if (!atualiza_msg[0]) snprintf(atualiza_msg, sizeof atualiza_msg, "Release sem EXE"); return 0; }
+		snprintf(url_exe, sizeof url_exe, "https://github.com/achadoia/kof98-comunidade-edition/releases/download/%s/KOF98-Comunidade-Edition.exe", tag);
+		atualiza_msg[0] = 0;
+	}
 	snprintf(atualiza_versao, sizeof atualiza_versao, "%s", tag[0] == 'v' ? tag + 1 : tag);
 	const char *fake = getenv("KOF_VERSAO_FAKE");          // teste: finge ser uma versão antiga
-	atualiza_estado = versao_num(tag) > versao_num(fake ? fake : KOF_VERSAO) ? ATU_NOVA : ATU_ATUAL;
-	if (getenv("KOF_DEBUG_ATUALIZA")) fprintf(stderr, "atualiza: tag \"%s\" (%d) x minha \"%s\" (%d) -> estado %d\n", tag, versao_num(tag), KOF_VERSAO, versao_num(KOF_VERSAO), atualiza_estado);
+	atualiza_estado = versao_numero(tag) > versao_numero(fake ? fake : KOF_VERSAO) ? ATU_NOVA : ATU_ATUAL;
+	if (getenv("KOF_DEBUG_ATUALIZA")) fprintf(stderr, "atualiza: tag \"%s\" (%d) x minha \"%s\" (%d) -> estado %d\n", tag, versao_numero(tag), KOF_VERSAO, versao_numero(KOF_VERSAO), atualiza_estado);
 	return 0;
 }
 void atualiza_checa(void)

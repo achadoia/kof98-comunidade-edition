@@ -195,9 +195,8 @@ static void compoe_atualiza(void)
 	snprintf(b, sizeof b, "Você está na %s.", KOF_VERSAO);
 	texto(150, 260, b, CZ, 2);
 	if (atualiza_estado == ATU_NOVA) {
-		texto(150, 340, "ENTER / A  atualiza agora", BR, 4);
+		texto(150, 340, "Atualizando automaticamente...", BR, 4);
 		texto(150, 385, "(baixa, troca o EXE e reabre o jogo sozinho)", CZ, 2);
-		texto(150, 430, "ESC  deixa pra depois", CZ, 4);
 		texto(150, 500, "Pra jogar ONLINE os dois precisam estar na mesma versão.", CZ, 2);
 	} else if (atualiza_estado == ATU_BAIXANDO) {
 		unsigned t = atualiza_total, n = atualiza_bytes;
@@ -314,10 +313,9 @@ void frontend_controles(int *rodando)
 	if (atualiza_na_tela()) {                          // aviso de versão nova por cima de tudo
 		sujo = 1;
 		if (atualiza_estado == ATU_PRONTA) { if (atualiza_aplicar()) *rodando = 0; return; }   // reinicia sozinho
-		if (novo[4] && atualiza_estado == ATU_NOVA) { audio_comando(0x71); atualiza_baixar(); }
-#ifdef KOF_TESTE
-		if (getenv("KOF_ATUALIZA_AUTO") && atualiza_estado == ATU_NOVA) atualiza_baixar();
-#endif
+		// 1.8.2+: atualiza SOZINHO (pedido do Matheus: achar a versão atual ao abrir e atualizar automaticamente).
+		// KOF_ATUALIZA_MANUAL=1 volta a esperar ENTER (dev/teste).
+		if (atualiza_estado == ATU_NOVA && (!getenv("KOF_ATUALIZA_MANUAL") || novo[4])) { audio_comando(0x71); atualiza_baixar(); }
 		return;
 	}
 	if (tela_rede == 1) {

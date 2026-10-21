@@ -10,6 +10,7 @@ extern char atualiza_msg[160];
 extern int atualiza_adiada;           // 1 = o jogador escolheu "depois"
 extern unsigned atualiza_bytes, atualiza_total;
 
+int versao_numero(const char *v);  // "v1.8.2" -> 1008002
 void atualiza_checa(void);            // dispara a consulta (thread)
 void atualiza_baixar(void);           // dispara o download (thread)
 int atualiza_aplicar(void);           // ATU_PRONTA: grava o .bat e o executa; 1 = pode fechar o jogo
